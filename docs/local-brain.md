@@ -65,11 +65,13 @@ Researcher Agent -> Writer Agent -> Reviewer Agent
 
 如果配置了 LLM Key，Researcher / Writer / Reviewer 会真实调用模型；如果没有配置，则使用本地规则兜底，仍会生成草稿但质量更像模板。
 
-本地 LLM 配置优先在 Streamlit 的 `5. 配置` 页面直接填写。当前支持：
+本地 LLM 配置优先在 Streamlit 的 `5. 配置` 页面直接填写。前端保存到 `local-brain/config.json` 的配置优先级高于 `.env`，这样在控制台里切换提供商会立即成为生产线的实际配置。切换提供商时，API Base URL 和默认模型会自动适配。当前支持：
 
 ```text
-OpenAI:   https://api.openai.com/v1      / gpt-4o-mini
-DeepSeek: https://api.deepseek.com       / deepseek-chat
+OpenAI:   https://api.openai.com/v1                         / gpt-4o-mini
+Claude:   https://api.anthropic.com/v1/                      / claude-sonnet-4-5-20250929
+Gemini:   https://generativelanguage.googleapis.com/v1beta/openai/ / gemini-2.5-flash
+DeepSeek: https://api.deepseek.com                           / deepseek-chat
 ```
 
 配置会保存到：
@@ -80,13 +82,13 @@ local-brain/config.json
 
 该文件已加入 `.gitignore`，不会提交到 GitHub。
 
-也可以使用环境变量兜底：
+也可以使用环境变量兜底；如果已经在 Streamlit 前端保存过配置，以前端配置为准：
 
 ```bash
-LOCAL_BRAIN_PROVIDER=deepseek
+LOCAL_BRAIN_PROVIDER=gemini
 LOCAL_BRAIN_API_KEY=sk-...
-LOCAL_BRAIN_MODEL=deepseek-chat
-LOCAL_BRAIN_BASE_URL=https://api.deepseek.com
+LOCAL_BRAIN_MODEL=gemini-2.5-flash
+LOCAL_BRAIN_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 ```
 
 Researcher 会读取：

@@ -53,6 +53,16 @@ PROVIDER_DEFAULTS = {
         "base_url": "https://api.openai.com/v1",
         "model": "gpt-4o-mini",
     },
+    "claude": {
+        "label": "Claude",
+        "base_url": "https://api.anthropic.com/v1/",
+        "model": "claude-sonnet-4-5-20250929",
+    },
+    "gemini": {
+        "label": "Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "model": "gemini-2.5-flash",
+    },
     "deepseek": {
         "label": "DeepSeek",
         "base_url": "https://api.deepseek.com",
@@ -90,16 +100,16 @@ def save_llm_config(config):
 def effective_llm_config():
     config = load_llm_config()
     env_values = local_brain_env()
-    provider = env_values.get("LOCAL_BRAIN_PROVIDER") or config["provider"]
+    provider = config.get("provider") or env_values.get("LOCAL_BRAIN_PROVIDER") or "openai"
     provider = provider.lower()
     if provider not in PROVIDER_DEFAULTS:
         provider = "openai"
     defaults = PROVIDER_DEFAULTS[provider]
     return {
         "provider": provider,
-        "base_url": env_values.get("LOCAL_BRAIN_BASE_URL") or config.get("base_url") or defaults["base_url"],
-        "model": env_values.get("LOCAL_BRAIN_MODEL") or config.get("model") or defaults["model"],
-        "api_key": env_values.get("LOCAL_BRAIN_API_KEY") or config.get("api_key") or "",
+        "base_url": config.get("base_url") or env_values.get("LOCAL_BRAIN_BASE_URL") or defaults["base_url"],
+        "model": config.get("model") or env_values.get("LOCAL_BRAIN_MODEL") or defaults["model"],
+        "api_key": config.get("api_key") or env_values.get("LOCAL_BRAIN_API_KEY") or "",
     }
 
 
@@ -380,16 +390,38 @@ with tab_config:
 
     current_config = load_llm_config()
     provider_options = list(PROVIDER_DEFAULTS.keys())
+
+    def apply_provider_defaults():
+        defaults = PROVIDER_DEFAULTS[st.session_state.llm_provider]
+        st.session_state.llm_base_url = defaults["base_url"]
+        st.session_state.llm_model = defaults["model"]
+
+    if "llm_provider" not in st.session_state:
+        st.session_state.llm_provider = current_config["provider"]
+    if "llm_base_url" not in st.session_state:
+        st.session_state.llm_base_url = current_config.get("base_url") or PROVIDER_DEFAULTS[current_config["provider"]]["base_url"]
+    if "llm_model" not in st.session_state:
+        st.session_state.llm_model = current_config.get("model") or PROVIDER_DEFAULTS[current_config["provider"]]["model"]
+    if "llm_api_key" not in st.session_state:
+        st.session_state.llm_api_key = current_config.get("api_key") or ""
+
     provider = st.selectbox(
         "提供商",
         provider_options,
-        index=provider_options.index(current_config["provider"]),
+        index=provider_options.index(st.session_state.llm_provider),
         format_func=lambda item: PROVIDER_DEFAULTS[item]["label"],
+        key="llm_provider",
+        on_change=apply_provider_defaults,
     )
     provider_defaults = PROVIDER_DEFAULTS[provider]
-    base_url = st.text_input("API Base URL", value=current_config.get("base_url") or provider_defaults["base_url"])
-    model = st.text_input("模型", value=current_config.get("model") or provider_defaults["model"])
-    api_key = st.text_input("API Key", value=current_config.get("api_key") or "", type="password")
+    st.info("切换提供商会自动填入官方 OpenAI-compatible Base URL 与推荐默认模型；仍可手动覆盖。")
+    if st.button("恢复该提供商默认 URL / 模型"):
+        apply_provider_defaults()
+        st.rerun()
+
+    base_url = st.text_input("API Base URL", key="llm_base_url")
+    model = st.text_input("模型", key="llm_model")
+    api_key = st.text_input("API Key", type="password", key="llm_api_key")
 
     col_save, col_test = st.columns([1, 1])
     with col_save:
@@ -397,9 +429,9 @@ with tab_config:
             save_llm_config(
                 {
                     "provider": provider,
-                    "base_url": base_url.strip() or provider_defaults["base_url"],
-                    "model": model.strip() or provider_defaults["model"],
-                    "api_key": api_key.strip(),
+                    "base_url": st.session_state.llm_base_url.strip() or provider_defaults["base_url"],
+                    "model": st.session_state.llm_model.strip() or provider_defaults["model"],
+                    "api_key": st.session_state.llm_api_key.strip(),
                 }
             )
             st.success("已保存。请重新运行一次生产任务以使用新配置。")
@@ -408,9 +440,9 @@ with tab_config:
             save_llm_config(
                 {
                     "provider": provider,
-                    "base_url": base_url.strip() or provider_defaults["base_url"],
-                    "model": model.strip() or provider_defaults["model"],
-                    "api_key": api_key.strip(),
+                    "base_url": st.session_state.llm_base_url.strip() or provider_defaults["base_url"],
+                    "model": st.session_state.llm_model.strip() or provider_defaults["model"],
+                    "api_key": st.session_state.llm_api_key.strip(),
                 }
             )
             args = [

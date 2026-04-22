@@ -178,16 +178,22 @@ class OpenAICompatibleClient:
         load_env_file(Path(".env.local"))
         load_env_file(Path(".env"))
         config = load_local_brain_config(Path("local-brain/config.json"))
-        provider = (
-            os.environ.get("LOCAL_BRAIN_PROVIDER")
-            or config.get("provider")
-            or "openai"
-        ).lower()
+        provider = (config.get("provider") or os.environ.get("LOCAL_BRAIN_PROVIDER") or "openai").lower()
         provider_defaults = {
             "openai": {
                 "base_url": "https://api.openai.com/v1",
                 "model": "gpt-4o-mini",
                 "api_key_env": "OPENAI_API_KEY",
+            },
+            "claude": {
+                "base_url": "https://api.anthropic.com/v1/",
+                "model": "claude-sonnet-4-5-20250929",
+                "api_key_env": "ANTHROPIC_API_KEY",
+            },
+            "gemini": {
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                "model": "gemini-2.5-flash",
+                "api_key_env": "GEMINI_API_KEY",
             },
             "deepseek": {
                 "base_url": "https://api.deepseek.com",
@@ -195,26 +201,28 @@ class OpenAICompatibleClient:
                 "api_key_env": "DEEPSEEK_API_KEY",
             },
         }
-        defaults = provider_defaults.get(provider, provider_defaults["openai"])
+        if provider not in provider_defaults:
+            provider = "openai"
+        defaults = provider_defaults[provider]
         self.provider = provider
         self.api_key = (
-            os.environ.get("LOCAL_BRAIN_API_KEY")
+            config.get("api_key")
+            or os.environ.get("LOCAL_BRAIN_API_KEY")
             or os.environ.get("LOCAL_BRAIN_OPENAI_API_KEY")
-            or config.get("api_key")
             or os.environ.get(defaults["api_key_env"])
             or os.environ.get("OPENAI_API_KEY")
         )
         self.base_url = (
-            os.environ.get("LOCAL_BRAIN_BASE_URL")
+            config.get("base_url")
+            or os.environ.get("LOCAL_BRAIN_BASE_URL")
             or os.environ.get("LOCAL_BRAIN_OPENAI_BASE_URL")
-            or config.get("base_url")
             or os.environ.get("OPENAI_BASE_URL")
             or defaults["base_url"]
         ).rstrip("/")
         self.model = (
-            os.environ.get("LOCAL_BRAIN_MODEL")
+            config.get("model")
+            or os.environ.get("LOCAL_BRAIN_MODEL")
             or os.environ.get("LOCAL_BRAIN_OPENAI_MODEL")
-            or config.get("model")
             or os.environ.get("OPENAI_MODEL")
             or defaults["model"]
         )
@@ -628,18 +636,22 @@ def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_term
     app = build_langgraph_app()
     if app is None:
         state = run_fallback_state_machine(initial_state)
+        state["llm_provider"] = llm.provider if initial_state["use_llm"] else "rules"
+        state["llm_model"] = llm.model if initial_state["use_llm"] else "rules"
         state["trace"] = append_trace(state, "Runtime", "used compatibility fallback because LangGraph is not installed", {"python": sys.version.split()[0], "llm": initial_state["use_llm"]})
         return state
     state = app.invoke(initial_state)
+    state["llm_provider"] = llm.provider if initial_state["use_llm"] else "rules"
+    state["llm_model"] = llm.model if initial_state["use_llm"] else "rules"
     state["trace"] = append_trace(
         state,
         "Runtime",
         "executed with LangGraph StateGraph",
         {
-            "python": sys.version.split()[0],
-            "llm": initial_state["use_llm"],
-            "provider": llm.provider if initial_state["use_llm"] else "rules",
-            "model": llm.model if initial_state["use_llm"] else "rules",
+                "python": sys.version.split()[0],
+                "llm": initial_state["use_llm"],
+                "provider": state["llm_provider"],
+                "model": state["llm_model"],
         },
     )
     return state
@@ -690,8 +702,8 @@ def main():
                 "seed": args.seed,
                 "runtime": "langgraph" if LANGGRAPH_AVAILABLE else "fallback",
                 "llm_enabled": bool(state.get("use_llm")),
-                "llm_provider": llm.provider if state.get("use_llm") else "rules",
-                "llm_model": llm.model if state.get("use_llm") else "rules",
+                "llm_provider": state.get("llm_provider", "rules"),
+                "llm_model": state.get("llm_model", "rules"),
                 "profile": state.get("profile_key"),
                 "review_passed": state.get("review_passed"),
                 "review_findings": state.get("review_findings", []),
