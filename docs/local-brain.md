@@ -27,6 +27,7 @@ local-brain/
 scripts/local-brain/
   validate-insight.mjs     校验文章 JSON
   add-insight.mjs          校验并写入 content/insights.ts
+  add-insights-batch.mjs   批量校验并写入多篇文章
 ```
 
 ## 3. 标准工作流
@@ -51,13 +52,27 @@ npm run brain:validate -- local-brain/drafts/your-article-slug.json
 npm run brain:add -- local-brain/drafts/your-article-slug.json
 ```
 
-6. 构建验证：
+6. 如果一次生成多篇文章，可以批量导入：
+
+```bash
+npm run brain:add-batch -- local-brain/drafts
+```
+
+批量导入会先校验全部 JSON；只要有一篇不合格，就不会写入任何文章。已经存在的 slug 会被跳过，方便重复执行。
+
+正式写入前可以先干跑检查：
+
+```bash
+npm run brain:add-batch -- --dry-run local-brain/drafts
+```
+
+7. 构建验证：
 
 ```bash
 npm run build
 ```
 
-7. 提交上线：
+8. 提交上线：
 
 ```bash
 git add .

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "brain:validate": "node scripts/local-brain/validate-insight.mjs",
-    "brain:add": "node scripts/local-brain/add-insight.mjs"
+    "brain:add": "node scripts/local-brain/add-insight.mjs",
+    "brain:add-batch": "node scripts/local-brain/add-insights-batch.mjs"
   },
   "dependencies": {
     "next": "16.0.10",
