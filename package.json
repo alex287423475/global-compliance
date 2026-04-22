@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "brain:validate": "node scripts/local-brain/validate-insight.mjs",
+    "brain:add": "node scripts/local-brain/add-insight.mjs"
   },
   "dependencies": {
     "next": "16.0.10",

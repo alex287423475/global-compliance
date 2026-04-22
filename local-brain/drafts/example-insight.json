@@ -1,0 +1,30 @@
+{
+  "slug": "paypal-stripe-account-review-document-checklist",
+  "title": "PayPal and Stripe account review document checklist for independent stores",
+  "zhTitle": "独立站 PayPal 与 Stripe 账户审核材料清单",
+  "category": "Payment Risk",
+  "market": "North America",
+  "riskLevel": "High",
+  "updatedAt": "2026-04-22",
+  "summary": "A practical checklist for independent-store operators preparing policies, screenshots, fulfillment evidence, and business explanations before a payment-gateway account review.",
+  "zhSummary": "面向独立站卖家的支付网关账户审核材料清单，用于整理政策页面、截图、履约证据和业务说明。",
+  "redlineTerms": [
+    "guaranteed approval",
+    "anonymous payment",
+    "risk-free refund"
+  ],
+  "sections": [
+    {
+      "heading": "Account review is an evidence problem",
+      "zhHeading": "账户审核首先是证据问题",
+      "body": "A payment-gateway review usually evaluates whether the store can prove product identity, fulfillment reliability, refund handling, customer support, and risk controls. The strongest response is built from evidence, not from broad promises.",
+      "zhBody": "支付网关审核通常会判断店铺是否能证明产品身份、履约能力、退款处理、客户支持和风险控制。强有力的回应来自证据，而不是宽泛承诺。"
+    },
+    {
+      "heading": "Policy language must match operations",
+      "zhHeading": "政策表述必须匹配真实运营",
+      "body": "Refund, shipping, privacy, and terms pages should describe the actual operating process. Overstated guarantees, vague delivery promises, or missing dispute procedures can increase review risk even when the underlying business is legitimate.",
+      "zhBody": "退款、物流、隐私和条款页面应描述真实运营流程。过度承诺、模糊配送表述或缺失争议处理机制，即使业务本身合法，也可能放大审核风险。"
+    }
+  ]
+}

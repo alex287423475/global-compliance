@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Compliance Insight Article",
+  "type": "object",
+  "required": [
+    "slug",
+    "title",
+    "zhTitle",
+    "category",
+    "market",
+    "riskLevel",
+    "updatedAt",
+    "summary",
+    "zhSummary",
+    "redlineTerms",
+    "sections"
+  ],
+  "properties": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 12
+    },
+    "zhTitle": {
+      "type": "string",
+      "minLength": 6
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Payment Risk",
+        "Marketplace Appeal",
+        "Market Entry",
+        "Supply Chain",
+        "IP Defense",
+        "Crisis PR",
+        "Capital Documents",
+        "B2B Contracts",
+        "Tax & Audit",
+        "Data Privacy"
+      ]
+    },
+    "market": {
+      "type": "string",
+      "minLength": 2
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["Critical", "High", "Medium"]
+    },
+    "updatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 40
+    },
+    "zhSummary": {
+      "type": "string",
+      "minLength": 20
+    },
+    "redlineTerms": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "string",
+        "minLength": 2
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["heading", "zhHeading", "body", "zhBody"],
+        "properties": {
+          "heading": {
+            "type": "string",
+            "minLength": 4
+          },
+          "zhHeading": {
+            "type": "string",
+            "minLength": 2
+          },
+          "body": {
+            "type": "string",
+            "minLength": 80
+          },
+          "zhBody": {
+            "type": "string",
+            "minLength": 40
+          }
+        }
+      }
+    }
+  }
+}
