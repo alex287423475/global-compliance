@@ -717,16 +717,21 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
     )
     passed, findings, feedback = deterministic_review(state)
     llm = state.get("llm")
+    reviewer_warning = ""
     if state.get("use_llm") and llm and llm.available and passed:
-        result = llm.chat_json(
-            "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. redlineTerms is a warning list and may contain prohibited phrases by design; do not reject the draft solely because the warning list names those phrases. Reject only when forbidden language or equivalent promises appear in the title, summary, or section bodies as public-facing copy. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
-            json.dumps({"red_lines": state.get("redline_terms", []), "draft": state.get("article", {})}, ensure_ascii=False),
-            temperature=0.0,
-        )
-        if str(result.get("status", "")).upper() == "REJECT":
-            passed = False
-            findings = list(result.get("findings", [])) or ["llm reviewer rejected draft"]
-            feedback = str(result.get("feedback", "Rewrite with tighter compliance language."))
+        try:
+            result = llm.chat_json(
+                "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. redlineTerms is a warning list and may contain prohibited phrases by design; do not reject the draft solely because the warning list names those phrases. Reject only when forbidden language or equivalent promises appear in the title, summary, or section bodies as public-facing copy. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
+                json.dumps({"red_lines": state.get("redline_terms", []), "draft": state.get("article", {})}, ensure_ascii=False),
+                temperature=0.0,
+            )
+            if str(result.get("status", "")).upper() == "REJECT":
+                passed = False
+                findings = list(result.get("findings", [])) or ["llm reviewer rejected draft"]
+                feedback = str(result.get("feedback", "Rewrite with tighter compliance language."))
+        except PipelineError as exc:
+            reviewer_warning = "Remote reviewer unavailable; kept deterministic review result: %s" % exc
+            print(reviewer_warning)
 
     revision_count = state.get("revision_count", 0)
     blocked = (not passed) and revision_count >= MAX_REVISIONS
@@ -746,7 +751,14 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
             state,
             "Reviewer Agent",
             "approved article" if passed else "rejected article and requested rewrite",
-            {"passed": passed, "revision": revision_count, "findings": findings, "blocked": blocked, "feedback": "" if passed else feedback},
+            {
+                "passed": passed,
+                "revision": revision_count,
+                "findings": findings,
+                "blocked": blocked,
+                "feedback": "" if passed else feedback,
+                "warning": reviewer_warning,
+            },
         ),
     }
 
