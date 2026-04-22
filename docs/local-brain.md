@@ -32,6 +32,32 @@ scripts/local-brain/
 
 ## 3. 标准工作流
 
+### 可视化控制台
+
+如果你不想敲命令，直接双击：
+
+```text
+start-local-brain-ui.bat
+```
+
+浏览器会打开本地控制台：
+
+```text
+http://127.0.0.1:8501
+```
+
+控制台支持：
+
+```text
+输入种子词 -> 批量生成草稿 -> 审阅文章 -> Fail-Safe 校验 -> 发布到 GitHub/Vercel
+```
+
+如果提示没有 Streamlit，先执行：
+
+```bash
+python -m pip install -r requirements-local-brain.txt
+```
+
 ### 本地生产线用法
 
 如果你只是输入一个种子词，直接生成合规情报草稿：
