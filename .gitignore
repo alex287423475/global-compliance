@@ -13,6 +13,7 @@ pnpm-debug.log*
 local-brain/seeds.txt
 local-brain/tmp-drafts/
 local-brain/tmp-audits/
+local-brain/tmp/
 __pycache__/
 .venv-local-brain/
 local-brain/audits/

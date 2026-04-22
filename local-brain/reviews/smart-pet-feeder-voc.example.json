@@ -1,0 +1,20 @@
+[
+  {
+    "source": "example-voc",
+    "product_category": "smart pet feeder",
+    "rating": 2,
+    "review": "The app disconnected during a weekend trip and support took two days to reply. I could not confirm whether the feeding schedule actually ran."
+  },
+  {
+    "source": "example-voc",
+    "product_category": "smart pet feeder",
+    "rating": 1,
+    "review": "The listing made it sound like it would solve my cat's anxiety, but it is just a feeder with camera alerts."
+  },
+  {
+    "source": "example-voc",
+    "product_category": "smart pet feeder",
+    "rating": 2,
+    "review": "Refund instructions were unclear. The store asked for video proof but the return policy did not mention that requirement."
+  }
+]

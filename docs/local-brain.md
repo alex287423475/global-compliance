@@ -49,10 +49,8 @@ http://127.0.0.1:8501
 控制台支持：
 
 ```text
-输入种子词 -> 批量生成草稿 -> 审阅文章 -> Fail-Safe 校验 -> 发布到 GitHub/Vercel
+输入种子词 -> 读取本地 RAG/VOC -> Researcher -> Writer -> Reviewer -> Fail-Safe 校验 -> 发布到 GitHub/Vercel
 ```
-
-打开后先看 `0. 工作流可视化`，可以看到 LangGraph 状态机图，并点击“启动工作流”观察 Reviewer 如何把高危初稿打回 Writer 重写。
 
 当前多智能体流程由 LangGraph StateGraph 编排：
 
@@ -64,6 +62,25 @@ Researcher Agent -> Writer Agent -> Reviewer Agent
 ```
 
 说明：LangGraph 官方 Python 包要求 Python 3.10+。本项目的启动脚本会自动创建 `.venv-local-brain`，优先使用 Codex 自带 Python 3.12，并安装 Streamlit 与 LangGraph。
+
+如果配置了 LLM Key，Researcher / Writer / Reviewer 会真实调用模型；如果没有配置，则使用本地规则兜底，仍会生成草稿但质量更像模板。
+
+本地 LLM 配置写入 `.env.local`：
+
+```bash
+LOCAL_BRAIN_OPENAI_API_KEY=sk-...
+LOCAL_BRAIN_OPENAI_MODEL=gpt-4o-mini
+LOCAL_BRAIN_OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+Researcher 会读取：
+
+```text
+local-brain/knowledge/
+local-brain/reviews/
+```
+
+支持 `.md`、`.txt`、`.json`、`.csv`。你后续爬取的差评、竞品退款政策、支付网关通知、FDA/Stripe/PayPal 摘要都放进这两个目录。
 
 如果提示没有 Streamlit，先执行：
 
@@ -77,6 +94,12 @@ powershell -ExecutionPolicy Bypass -File scripts/ensure-local-brain-env.ps1
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器"
+```
+
+禁用 LLM，只跑本地规则：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器" -NoLlm
 ```
 
 指定草稿输出目录：

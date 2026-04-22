@@ -2,7 +2,10 @@ param(
   [string]$Seed = "",
   [string]$SeedsFile = "local-brain/seeds.txt",
   [string]$DraftDir = "local-brain/drafts",
+  [string]$SourceDir = "local-brain/knowledge",
+  [string]$ReviewsDir = "local-brain/reviews",
   [switch]$Overwrite,
+  [switch]$NoLlm,
   [switch]$Publish
 )
 
@@ -54,10 +57,20 @@ if ($Seeds.Count -eq 0) {
 Write-Step "Generating local insight drafts"
 
 foreach ($Item in $Seeds) {
-  $Args = @("scripts/local-brain/generate-insight.py", "--seed", $Item, "--draft-dir", $DraftDir)
+  $Args = @(
+    "scripts/local-brain/generate-insight.py",
+    "--seed", $Item,
+    "--draft-dir", $DraftDir,
+    "--source-dir", $SourceDir,
+    "--reviews-dir", $ReviewsDir
+  )
 
   if ($Overwrite) {
     $Args += "--overwrite"
+  }
+
+  if ($NoLlm) {
+    $Args += "--no-llm"
   }
 
   & $LocalBrainPython @Args
