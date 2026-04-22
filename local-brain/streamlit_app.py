@@ -13,6 +13,7 @@ AUDIT_DIR = REPO_ROOT / "local-brain" / "audits"
 KNOWLEDGE_DIR = REPO_ROOT / "local-brain" / "knowledge"
 REVIEWS_DIR = REPO_ROOT / "local-brain" / "reviews"
 TMP_DIR = REPO_ROOT / "local-brain" / "tmp"
+CONFIG_PATH = REPO_ROOT / "local-brain" / "config.json"
 SEEDS_FILE = REPO_ROOT / "local-brain" / "seeds.txt"
 EXAMPLE_SEEDS_FILE = REPO_ROOT / "local-brain" / "seeds.example.txt"
 PYTHON_EXE = sys.executable
@@ -44,6 +45,70 @@ def local_brain_env():
     values.update(load_env_file(REPO_ROOT / ".env.local"))
     values.update(os.environ)
     return values
+
+
+PROVIDER_DEFAULTS = {
+    "openai": {
+        "label": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+    },
+    "deepseek": {
+        "label": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-chat",
+    },
+}
+
+
+def load_llm_config():
+    if CONFIG_PATH.exists():
+        try:
+            data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = {}
+    else:
+        data = {}
+
+    provider = str(data.get("provider") or "openai").lower()
+    if provider not in PROVIDER_DEFAULTS:
+        provider = "openai"
+    defaults = PROVIDER_DEFAULTS[provider]
+    return {
+        "provider": provider,
+        "base_url": data.get("base_url") or defaults["base_url"],
+        "model": data.get("model") or defaults["model"],
+        "api_key": data.get("api_key") or "",
+    }
+
+
+def save_llm_config(config):
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def effective_llm_config():
+    config = load_llm_config()
+    env_values = local_brain_env()
+    provider = env_values.get("LOCAL_BRAIN_PROVIDER") or config["provider"]
+    provider = provider.lower()
+    if provider not in PROVIDER_DEFAULTS:
+        provider = "openai"
+    defaults = PROVIDER_DEFAULTS[provider]
+    return {
+        "provider": provider,
+        "base_url": env_values.get("LOCAL_BRAIN_BASE_URL") or config.get("base_url") or defaults["base_url"],
+        "model": env_values.get("LOCAL_BRAIN_MODEL") or config.get("model") or defaults["model"],
+        "api_key": env_values.get("LOCAL_BRAIN_API_KEY") or config.get("api_key") or "",
+    }
+
+
+def masked(value):
+    if not value:
+        return "NOT CONFIGURED"
+    if len(value) <= 8:
+        return "*" * len(value)
+    return value[:4] + "..." + value[-4:]
 
 
 def run_command(args, timeout=180):
@@ -140,16 +205,17 @@ def render_audit_trace(audit):
 st.title("Local Brain 合规文章自动化生产线")
 st.caption("真实生产流程：本地 RAG / VOC -> Researcher -> Writer -> Reviewer -> Fail-Safe -> JSON 草稿")
 
-env_values = local_brain_env()
-llm_ready = bool(env_values.get("LOCAL_BRAIN_OPENAI_API_KEY") or env_values.get("OPENAI_API_KEY"))
-model_name = env_values.get("LOCAL_BRAIN_OPENAI_MODEL") or env_values.get("OPENAI_MODEL") or "gpt-4o-mini"
+llm_config = effective_llm_config()
+llm_ready = bool(llm_config.get("api_key"))
+provider_label = PROVIDER_DEFAULTS[llm_config["provider"]]["label"]
+model_name = llm_config["model"]
 
 with st.sidebar:
     st.header("运行环境")
     st.write("Python")
     st.code(PYTHON_EXE, language="text")
     st.write("LLM")
-    st.code("%s / %s" % ("READY" if llm_ready else "NOT CONFIGURED", model_name), language="text")
+    st.code("%s / %s / %s" % ("READY" if llm_ready else "NOT CONFIGURED", provider_label, model_name), language="text")
     st.write("草稿目录")
     st.code(rel(DRAFT_DIR), language="text")
 
@@ -308,9 +374,66 @@ with tab_config:
     st.write("Researcher 会读取这些目录中的 `.md`、`.txt`、`.json`、`.csv` 文件。")
     st.code(rel(KNOWLEDGE_DIR), language="text")
     st.code(rel(REVIEWS_DIR), language="text")
-    st.subheader("LLM 环境变量")
-    st.write("写入 `.env.local` 后重启控制台即可。")
-    st.code(
-        "LOCAL_BRAIN_OPENAI_API_KEY=sk-...\nLOCAL_BRAIN_OPENAI_MODEL=gpt-4o-mini\nLOCAL_BRAIN_OPENAI_BASE_URL=https://api.openai.com/v1",
-        language="bash",
+    st.divider()
+    st.subheader("LLM 提供商配置")
+    st.caption("配置会保存到本地 local-brain/config.json，该文件已加入 .gitignore，不会提交到 GitHub。")
+
+    current_config = load_llm_config()
+    provider_options = list(PROVIDER_DEFAULTS.keys())
+    provider = st.selectbox(
+        "提供商",
+        provider_options,
+        index=provider_options.index(current_config["provider"]),
+        format_func=lambda item: PROVIDER_DEFAULTS[item]["label"],
+    )
+    provider_defaults = PROVIDER_DEFAULTS[provider]
+    base_url = st.text_input("API Base URL", value=current_config.get("base_url") or provider_defaults["base_url"])
+    model = st.text_input("模型", value=current_config.get("model") or provider_defaults["model"])
+    api_key = st.text_input("API Key", value=current_config.get("api_key") or "", type="password")
+
+    col_save, col_test = st.columns([1, 1])
+    with col_save:
+        if st.button("保存 LLM 配置", type="primary"):
+            save_llm_config(
+                {
+                    "provider": provider,
+                    "base_url": base_url.strip() or provider_defaults["base_url"],
+                    "model": model.strip() or provider_defaults["model"],
+                    "api_key": api_key.strip(),
+                }
+            )
+            st.success("已保存。请重新运行一次生产任务以使用新配置。")
+    with col_test:
+        if st.button("测试 LLM 配置"):
+            save_llm_config(
+                {
+                    "provider": provider,
+                    "base_url": base_url.strip() or provider_defaults["base_url"],
+                    "model": model.strip() or provider_defaults["model"],
+                    "api_key": api_key.strip(),
+                }
+            )
+            args = [
+                PYTHON_EXE,
+                "scripts/local-brain/generate-insight.py",
+                "--seed",
+                "PayPal Stripe account review",
+                "--draft-dir",
+                "local-brain/tmp-drafts",
+                "--audit-dir",
+                "local-brain/tmp-audits",
+                "--overwrite",
+            ]
+            code, output = run_command(args, timeout=180)
+            show_command_result(code, output, "LLM 配置可用，测试草稿已生成到临时目录")
+
+    st.write("当前生效配置")
+    active_config = effective_llm_config()
+    st.json(
+        {
+            "provider": active_config["provider"],
+            "base_url": active_config["base_url"],
+            "model": active_config["model"],
+            "api_key": masked(active_config["api_key"]),
+        }
     )

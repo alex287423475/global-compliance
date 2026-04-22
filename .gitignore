@@ -17,3 +17,4 @@ local-brain/tmp/
 __pycache__/
 .venv-local-brain/
 local-brain/audits/
+local-brain/config.json

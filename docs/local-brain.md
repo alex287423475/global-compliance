@@ -65,12 +65,28 @@ Researcher Agent -> Writer Agent -> Reviewer Agent
 
 如果配置了 LLM Key，Researcher / Writer / Reviewer 会真实调用模型；如果没有配置，则使用本地规则兜底，仍会生成草稿但质量更像模板。
 
-本地 LLM 配置写入 `.env.local`：
+本地 LLM 配置优先在 Streamlit 的 `5. 配置` 页面直接填写。当前支持：
+
+```text
+OpenAI:   https://api.openai.com/v1      / gpt-4o-mini
+DeepSeek: https://api.deepseek.com       / deepseek-chat
+```
+
+配置会保存到：
+
+```text
+local-brain/config.json
+```
+
+该文件已加入 `.gitignore`，不会提交到 GitHub。
+
+也可以使用环境变量兜底：
 
 ```bash
-LOCAL_BRAIN_OPENAI_API_KEY=sk-...
-LOCAL_BRAIN_OPENAI_MODEL=gpt-4o-mini
-LOCAL_BRAIN_OPENAI_BASE_URL=https://api.openai.com/v1
+LOCAL_BRAIN_PROVIDER=deepseek
+LOCAL_BRAIN_API_KEY=sk-...
+LOCAL_BRAIN_MODEL=deepseek-chat
+LOCAL_BRAIN_BASE_URL=https://api.deepseek.com
 ```
 
 Researcher 会读取：

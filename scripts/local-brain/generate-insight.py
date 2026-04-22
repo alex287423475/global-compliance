@@ -105,6 +105,15 @@ def load_env_file(path: Path) -> None:
             os.environ[key] = value
 
 
+def load_local_brain_config(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise PipelineError("Invalid local brain config JSON: %s" % exc)
+
+
 def append_trace(state: WorkflowState, agent: str, action: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return state.get("trace", []) + [{"agent": agent, "action": action, "data": data}]
 
@@ -168,13 +177,47 @@ class OpenAICompatibleClient:
     def __init__(self) -> None:
         load_env_file(Path(".env.local"))
         load_env_file(Path(".env"))
-        self.api_key = os.environ.get("LOCAL_BRAIN_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        config = load_local_brain_config(Path("local-brain/config.json"))
+        provider = (
+            os.environ.get("LOCAL_BRAIN_PROVIDER")
+            or config.get("provider")
+            or "openai"
+        ).lower()
+        provider_defaults = {
+            "openai": {
+                "base_url": "https://api.openai.com/v1",
+                "model": "gpt-4o-mini",
+                "api_key_env": "OPENAI_API_KEY",
+            },
+            "deepseek": {
+                "base_url": "https://api.deepseek.com",
+                "model": "deepseek-chat",
+                "api_key_env": "DEEPSEEK_API_KEY",
+            },
+        }
+        defaults = provider_defaults.get(provider, provider_defaults["openai"])
+        self.provider = provider
+        self.api_key = (
+            os.environ.get("LOCAL_BRAIN_API_KEY")
+            or os.environ.get("LOCAL_BRAIN_OPENAI_API_KEY")
+            or config.get("api_key")
+            or os.environ.get(defaults["api_key_env"])
+            or os.environ.get("OPENAI_API_KEY")
+        )
         self.base_url = (
-            os.environ.get("LOCAL_BRAIN_OPENAI_BASE_URL")
+            os.environ.get("LOCAL_BRAIN_BASE_URL")
+            or os.environ.get("LOCAL_BRAIN_OPENAI_BASE_URL")
+            or config.get("base_url")
             or os.environ.get("OPENAI_BASE_URL")
-            or "https://api.openai.com/v1"
+            or defaults["base_url"]
         ).rstrip("/")
-        self.model = os.environ.get("LOCAL_BRAIN_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
+        self.model = (
+            os.environ.get("LOCAL_BRAIN_MODEL")
+            or os.environ.get("LOCAL_BRAIN_OPENAI_MODEL")
+            or config.get("model")
+            or os.environ.get("OPENAI_MODEL")
+            or defaults["model"]
+        )
 
     @property
     def available(self) -> bool:
@@ -182,7 +225,7 @@ class OpenAICompatibleClient:
 
     def chat_json(self, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> Dict[str, Any]:
         if not self.available:
-            raise PipelineError("LLM is not configured. Set LOCAL_BRAIN_OPENAI_API_KEY or OPENAI_API_KEY.")
+            raise PipelineError("LLM is not configured. Set it in local-brain/config.json or LOCAL_BRAIN_API_KEY.")
 
         payload = {
             "model": self.model,
@@ -588,7 +631,17 @@ def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_term
         state["trace"] = append_trace(state, "Runtime", "used compatibility fallback because LangGraph is not installed", {"python": sys.version.split()[0], "llm": initial_state["use_llm"]})
         return state
     state = app.invoke(initial_state)
-    state["trace"] = append_trace(state, "Runtime", "executed with LangGraph StateGraph", {"python": sys.version.split()[0], "llm": initial_state["use_llm"], "model": llm.model if initial_state["use_llm"] else "rules"})
+    state["trace"] = append_trace(
+        state,
+        "Runtime",
+        "executed with LangGraph StateGraph",
+        {
+            "python": sys.version.split()[0],
+            "llm": initial_state["use_llm"],
+            "provider": llm.provider if initial_state["use_llm"] else "rules",
+            "model": llm.model if initial_state["use_llm"] else "rules",
+        },
+    )
     return state
 
 
@@ -637,6 +690,8 @@ def main():
                 "seed": args.seed,
                 "runtime": "langgraph" if LANGGRAPH_AVAILABLE else "fallback",
                 "llm_enabled": bool(state.get("use_llm")),
+                "llm_provider": llm.provider if state.get("use_llm") else "rules",
+                "llm_model": llm.model if state.get("use_llm") else "rules",
                 "profile": state.get("profile_key"),
                 "review_passed": state.get("review_passed"),
                 "review_findings": state.get("review_findings", []),
