@@ -32,6 +32,48 @@ scripts/local-brain/
 
 ## 3. 标准工作流
 
+### 最简单用法
+
+把 AI 生成的文章 JSON 放进：
+
+```text
+local-brain/drafts/
+```
+
+然后双击项目根目录的：
+
+```text
+publish-insights.bat
+```
+
+脚本会自动完成：
+
+```text
+检查草稿 -> 导入网站 -> npm run build -> git commit -> git push -> Vercel 自动部署
+```
+
+如果你想在命令行执行：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1
+```
+
+只提交不推送：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1 -NoPush
+```
+
+只检查草稿，不写入网站：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1 -CheckOnly
+```
+
+如果工作区有其它未提交改动，脚本会停止，避免把无关内容一起发布。
+
+### 手动分步用法
+
 1. 准备原始资料。
 2. 使用 `local-brain/prompts/insight-agent-prompt.md` 让 AI 输出 JSON。
 3. 保存到：
