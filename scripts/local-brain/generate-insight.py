@@ -61,6 +61,17 @@ FORBIDDEN_REPLACEMENTS = {
     "instant customs clearance": "customs documentation readiness",
 }
 
+ARTICLE_STYLE_REPLACEMENTS = {
+    "architecture": "consideration",
+    "architectures": "considerations",
+    "framework": "consideration",
+    "frameworks": "considerations",
+    "checklist": "essential",
+    "checklists": "essentials",
+    "brief": "analysis",
+    "briefs": "analyses",
+}
+
 
 class PipelineError(Exception):
     pass
@@ -174,13 +185,23 @@ def sanitize_claim_text(text: str) -> str:
     return cleaned
 
 
+def articleize_text(text: str) -> str:
+    cleaned = text
+    for source, target in ARTICLE_STYLE_REPLACEMENTS.items():
+        cleaned = re.sub(r"\b%s\b" % re.escape(source), target, cleaned, flags=re.IGNORECASE)
+    return cleaned
+
+
 def sanitize_article_claims(value: Any) -> Any:
     if isinstance(value, str):
         return sanitize_claim_text(value)
     if isinstance(value, list):
         return [sanitize_article_claims(item) for item in value]
     if isinstance(value, dict):
-        return {key: sanitize_article_claims(item) for key, item in value.items()}
+        sanitized: Dict[str, Any] = {}
+        for key, item in value.items():
+            sanitized[key] = item if key == "redlineTerms" else sanitize_article_claims(item)
+        return sanitized
     return value
 
 
@@ -201,11 +222,20 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     profile = state.get("profile", {})
     seed = state.get("seed", "compliance asset")
 
-    normalized["slug"] = slugify(first_string(normalized.get("slug")) or seed + " compliance checklist")
-    normalized["title"] = first_string(normalized.get("title"), "%s compliance evidence checklist" % title_case_seed(seed))
-    normalized["zhTitle"] = first_string(normalized.get("zhTitle"), "%s合规证据清单" % seed)
-    normalized["summary"] = first_string(normalized.get("summary"), "A compliance intelligence brief for evidence-bounded content and review preparation.")
-    normalized["zhSummary"] = first_string(normalized.get("zhSummary"), "用于整理证据边界、合规表达和审核准备的情报简报。")
+    normalized["slug"] = slugify(first_string(normalized.get("slug")) or seed + " compliance guide")
+    normalized["title"] = articleize_text(
+        first_string(normalized.get("title"), "%s compliance guide for cross-border sellers" % title_case_seed(seed))
+    )
+    normalized["zhTitle"] = first_string(normalized.get("zhTitle"), "%s跨境合规指南" % seed)
+    normalized["summary"] = articleize_text(
+        first_string(
+            normalized.get("summary"),
+            "A publishable compliance analysis for teams preparing SEO wording, policy pages, evidence files, and review-ready explanations.",
+        )
+    )
+    normalized["zhSummary"] = first_string(
+        normalized.get("zhSummary"), "面向网站情报库发布的合规分析文章，用于梳理风险边界、安全表达和证据准备。"
+    )
     normalized["market"] = first_string(normalized.get("market"), profile.get("market", "North America"))
     normalized["updatedAt"] = dt.date.today().isoformat()
 
@@ -215,12 +245,15 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     risk_level = first_string(normalized.get("riskLevel"), profile.get("risk_level", "High"))
     normalized["riskLevel"] = risk_level if risk_level in ALLOWED_RISK_LEVELS else profile.get("risk_level", "High")
 
+    state_redlines = [first_string(item) for item in state.get("redline_terms", []) if first_string(item)]
     redlines = normalized.get("redlineTerms", [])
     if not isinstance(redlines, list):
         redlines = [first_string(redlines)]
     normalized["redlineTerms"] = [first_string(item) for item in redlines if first_string(item)]
-    if len(normalized["redlineTerms"]) < 2:
-        normalized["redlineTerms"] = list(dict.fromkeys(normalized["redlineTerms"] + state.get("redline_terms", [])[:4]))
+    if state_redlines:
+        normalized["redlineTerms"] = list(dict.fromkeys(state_redlines[:8] + normalized["redlineTerms"]))[:8]
+    elif len(normalized["redlineTerms"]) < 2:
+        normalized["redlineTerms"] = normalized["redlineTerms"][:4]
 
     sections = normalized.get("sections", [])
     if not isinstance(sections, list):
@@ -231,13 +264,18 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
             continue
         cleaned_sections.append(
             {
-                "heading": first_string(section.get("heading"), "Evidence-bounded operating language"),
+                "heading": articleize_text(first_string(section.get("heading"), "What compliant operating language looks like")),
                 "zhHeading": first_string(section.get("zhHeading"), "证据边界内的运营表达"),
-                "body": first_string(section.get("body"), "Keep claims tied to observable operations, policies, support records, and fulfillment evidence."),
+                "body": articleize_text(
+                    first_string(
+                        section.get("body"),
+                        "Keep claims tied to observable operations, policies, support records, and fulfillment evidence.",
+                    )
+                ),
                 "zhBody": first_string(section.get("zhBody"), "将表达限制在可观察的运营事实、政策、客服记录和履约证据内。"),
             }
         )
-    if len(cleaned_sections) < 2:
+    if len(cleaned_sections) < 3:
         fallback = build_fallback_article(state, seed, state.get("revision_count", 0))
         cleaned_sections = fallback["sections"]
     normalized["sections"] = cleaned_sections
@@ -538,39 +576,45 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
     profile = state["profile"]
     market = profile.get("market", "North America")
     seed_title = title_case_seed(safe_seed)
-    slug = slugify(safe_seed + " compliance checklist")
+    slug = slugify(safe_seed + " compliance guide")
     evidence_text = ", ".join(state.get("evidence", [])[:5])
     safe_terms_text = ", ".join(state.get("safe_terms", [])[:6])
     rewrite_note = " after reviewer revision" if revision_count > 0 else ""
     return {
         "slug": slug,
-        "title": "%s compliance keyword and evidence checklist%s" % (seed_title, rewrite_note),
-        "zhTitle": "%s合规关键词与证据清单" % safe_seed,
+        "title": "%s compliance guide for cross-border sellers%s" % (seed_title, rewrite_note),
+        "zhTitle": "%s跨境合规指南" % safe_seed,
         "category": profile.get("category", "Payment Risk"),
         "market": market,
         "riskLevel": profile.get("risk_level", "High"),
         "updatedAt": dt.date.today().isoformat(),
-        "summary": "A structured compliance intelligence brief for teams preparing SEO wording, policy pages, evidence files, and review-ready explanations around %s in %s." % (seed_title, market),
-        "zhSummary": "面向%s场景的合规情报简报，用于整理 SEO 表达、政策页面、证据文件和可审阅的业务说明。" % safe_seed,
+        "summary": "A publishable compliance article for teams selling %s into %s, focused on safer SEO wording, policy-page language, customer-facing claims, and the evidence files needed before disputes or platform review." % (seed_title, market),
+        "zhSummary": "面向%s场景的可发布合规文章，重点梳理更安全的 SEO 表达、政策页面语言、客户可见说法，以及在争议或平台审核前应准备的证据文件。" % safe_seed,
         "redlineTerms": state.get("redline_terms", [])[:8],
         "sections": [
             {
-                "heading": "Commercial wording must stay inside the evidence boundary",
-                "zhHeading": "商业表达必须停留在证据边界内",
-                "body": "For %s, the safest content strategy is to describe observable product facts, operating procedures, refund handling, fulfillment limits, and support channels. Avoid broad outcome promises. The page should make a reviewer understand what is sold, how it is delivered, how disputes are handled, and what evidence supports each claim." % seed_title,
-                "zhBody": "针对%s，稳妥的内容策略是描述可验证的产品事实、运营流程、退款处理、履约边界和客服通道。不要使用宽泛的结果承诺。页面应让审核方清楚知道卖的是什么、如何交付、争议如何处理，以及每个说法由什么证据支撑。" % safe_seed,
+                "heading": "Why %s draws closer review from payment teams and platforms" % seed_title,
+                "zhHeading": "为什么%s更容易被支付团队和平台重点审查" % safe_seed,
+                "body": "For %s, the real risk rarely starts with one forbidden word alone. Review pressure usually comes from the combination of product claims, refund expectations, delivery promises, and how clearly the seller explains operational limits. A publishable article should help readers understand where scrutiny begins and which public-facing statements make an account look harder to trust." % seed_title,
+                "zhBody": "针对%s，真正的风险通常不是某一个禁词单独触发的，而是产品说法、退款预期、交付承诺和运营边界说明叠加后的结果。可发布的文章应先帮助读者理解：审查通常从哪里开始，哪些对外表达会让账户看起来更不值得信任。" % safe_seed,
             },
             {
-                "heading": "Keyword assets should separate demand capture from risk claims",
-                "zhHeading": "关键词资产要把需求捕获与风险承诺分开",
-                "body": "High-intent keywords can be useful, but they should not force the page into prohibited or unverifiable claims. Build the keyword bank around safer phrases such as %s. Keep sensitive phrases in a redline list for internal review rather than placing them in titles, checkout copy, policy pages, or advertising claims." % safe_terms_text,
-                "zhBody": "高意向关键词有价值，但不能把页面推向禁止性或不可验证的承诺。关键词库应围绕更安全的表达构建，例如：%s。敏感词应进入内部红线清单，而不是出现在标题、结账文案、政策页面或广告承诺中。" % safe_terms_text,
+                "heading": "Which claims should stay out of titles, listings, and policy pages",
+                "zhHeading": "哪些说法不该出现在标题、Listing 和政策页面里",
+                "body": "High-intent keywords still matter, but they must not force the page into prohibited or unverifiable claims. Build content around safer demand-capture phrases such as %s. Keep the truly sensitive wording in an internal redline list instead of surfacing it in titles, checkout copy, return policies, or ad language." % safe_terms_text,
+                "zhBody": "高意向关键词仍然重要，但不能把页面推向禁止性或不可验证的承诺。内容应围绕更安全的需求捕获表达来写，例如：%s。真正敏感的说法应该留在内部红线清单中，而不是出现在标题、结账文案、退款政策或广告话术里。" % safe_terms_text,
             },
             {
-                "heading": "Evidence files make the asset reusable",
-                "zhHeading": "证据文件决定资产能否复用",
-                "body": "A reusable compliance asset should include the keyword list, safer alternatives, platform-specific policy notes, and an evidence checklist. For this category, the minimum evidence set should include: %s. This keeps the asset useful for SEO, payment review, customer support, and internal training." % evidence_text,
-                "zhBody": "可复用的合规资产应包含关键词列表、安全替代表达、平台政策说明和证据清单。该类目最低证据集应包括：%s。这样它才能同时服务于 SEO、支付审核、客服回应和内部培训。" % evidence_text,
+                "heading": "What a safer content and support stack looks like in practice",
+                "zhHeading": "更安全的内容与客服栈在实操中应该是什么样子",
+                "body": "A stronger page does not just rewrite adjectives. It aligns product copy, FAQ answers, refund language, fulfillment notes, and support replies so they all describe the same operating reality. Readers should leave with a clear picture of what the product does, what it does not do, how support responds, and which promises the seller is willing to stand behind in writing.",
+                "zhBody": "更稳妥的页面不只是替换几个形容词，而是让产品文案、FAQ 回答、退款语言、履约说明和客服回复都描述同一套运营现实。读者看完后，应能清楚理解产品能做什么、不能做什么、客服怎样回应，以及卖家愿意以书面形式承担哪些承诺。",
+            },
+            {
+                "heading": "Which evidence files should be ready before disputes or review",
+                "zhHeading": "在争议或审核发生前，哪些证据文件应该先准备好",
+                "body": "The asset only becomes operationally useful when it is backed by documents. For this category, the minimum evidence set should include %s. Once those files exist, the article can support SEO work, payment review, customer-service handling, and internal training without drifting into unsupported claims." % evidence_text,
+                "zhBody": "只有背后配套好文件，这份资产才真正具备运营价值。对这个类目而言，最低证据集应包括：%s。一旦这些文件准备齐全，这篇文章才能同时服务 SEO、支付审核、客服处理和内部培训，而不会滑向无证据支撑的承诺。",
             },
         ],
     }
@@ -614,7 +658,7 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
             },
         }
         article = llm.chat_json(
-            "You are a senior cross-border compliance architect. Write a high-conversion SEO compliance asset in a restrained, authoritative consulting tone. Avoid every red line term exactly and semantically. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
+            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, or checklist. Write a polished article in a restrained, authoritative consulting tone. The title, summary, and section headings must read like article copy a buyer would read on a website. redlineTerms must list the forbidden phrases that should stay out of public-facing copy; do not rewrite those warning phrases into euphemisms. Avoid every red line term exactly and semantically in the summary and section bodies. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
             json.dumps(payload, ensure_ascii=False),
             temperature=0.35,
         )
@@ -648,6 +692,12 @@ def publishable_text(article: Dict[str, Any]) -> str:
 def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
     article = state["article"]
     findings = contains_any(publishable_text(article), state.get("strict_terms", []))
+    article_voice_text = "\n".join(
+        [article.get("title", ""), article.get("summary", "")]
+        + [section.get("heading", "") for section in article.get("sections", [])]
+    ).lower()
+    if any(term in article_voice_text for term in ["architecture", "architectures", "framework", "frameworks", "checklist", "checklists", "brief", "briefs"]):
+        findings.append("internal-document wording in article copy")
     if len(article.get("sections", [])) < 2:
         findings.append("too few sections")
     if any(term in publishable_text(article).lower() for term in ["best ever", "miracle", "easy money", "100 percent"]):
@@ -669,7 +719,7 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
     llm = state.get("llm")
     if state.get("use_llm") and llm and llm.available and passed:
         result = llm.chat_json(
-            "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
+            "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. redlineTerms is a warning list and may contain prohibited phrases by design; do not reject the draft solely because the warning list names those phrases. Reject only when forbidden language or equivalent promises appear in the title, summary, or section bodies as public-facing copy. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
             json.dumps({"red_lines": state.get("redline_terms", []), "draft": state.get("article", {})}, ensure_ascii=False),
             temperature=0.0,
         )
