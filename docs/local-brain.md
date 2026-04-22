@@ -63,7 +63,7 @@ Researcher Agent -> Writer Agent -> Reviewer Agent
 
 说明：LangGraph 官方 Python 包要求 Python 3.10+。本项目的启动脚本会自动创建 `.venv-local-brain`，优先使用 Codex 自带 Python 3.12，并安装 Streamlit 与 LangGraph。
 
-如果配置了 LLM Key，Researcher / Writer / Reviewer 会真实调用模型；如果没有配置，则使用本地规则兜底，仍会生成草稿但质量更像模板。
+Researcher / Writer / Reviewer 必须真实调用模型。没有配置 LLM Key 时，生产线会直接阻断，不允许生成本地规则草稿。
 
 本地 LLM 配置优先在 Streamlit 的 `5. 配置` 页面直接填写。前端保存到 `local-brain/config.json` 的配置优先级高于 `.env`，这样在控制台里切换提供商会立即成为生产线的实际配置。切换提供商时，API Base URL 和默认模型会自动适配。当前支持：
 
@@ -114,12 +114,6 @@ powershell -ExecutionPolicy Bypass -File scripts/ensure-local-brain-env.ps1
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器"
-```
-
-禁用 LLM，只跑本地规则：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器" -NoLlm
 ```
 
 指定草稿输出目录：

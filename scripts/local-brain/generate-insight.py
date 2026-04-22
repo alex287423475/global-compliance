@@ -619,8 +619,10 @@ def run_fallback_state_machine(initial_state: WorkflowState) -> WorkflowState:
             return state
 
 
-def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_terms: Dict[str, Any], source_dir: str, reviews_dir: str, use_llm: bool) -> WorkflowState:
+def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_terms: Dict[str, Any], source_dir: str, reviews_dir: str) -> WorkflowState:
     llm = OpenAICompatibleClient()
+    if not llm.available:
+        raise PipelineError("LLM is required. Configure API Key in Streamlit 5. 配置 or local-brain/config.json before generating articles.")
     initial_state: WorkflowState = {
         "seed": seed,
         "notes": notes.strip(),
@@ -630,7 +632,7 @@ def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_term
         "forbidden_terms": forbidden_terms,
         "source_dir": source_dir,
         "reviews_dir": reviews_dir,
-        "use_llm": bool(use_llm and llm.available),
+        "use_llm": True,
         "llm": llm,
     }
     app = build_langgraph_app()
@@ -648,10 +650,10 @@ def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_term
         "Runtime",
         "executed with LangGraph StateGraph",
         {
-                "python": sys.version.split()[0],
-                "llm": initial_state["use_llm"],
-                "provider": state["llm_provider"],
-                "model": state["llm_model"],
+            "python": sys.version.split()[0],
+            "llm": initial_state["use_llm"],
+            "provider": state["llm_provider"],
+            "model": state["llm_model"],
         },
     )
     return state
@@ -666,7 +668,7 @@ def parse_args():
     parser.add_argument("--draft-dir", default="local-brain/drafts", help="Output directory for generated JSON drafts.")
     parser.add_argument("--audit-dir", default="local-brain/audits", help="Output directory for workflow audit traces.")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite an existing draft with the same slug.")
-    parser.add_argument("--no-llm", action="store_true", help="Disable LLM calls and use deterministic local rules.")
+    parser.add_argument("--no-llm", action="store_true", help="Deprecated. This pipeline requires LLM and will fail if this flag is used.")
     return parser.parse_args()
 
 
@@ -682,8 +684,10 @@ def main():
         if not notes_path.exists():
             raise PipelineError("notes file does not exist: %s" % args.notes_file)
         notes = notes_path.read_text(encoding="utf-8")
+    if args.no_llm:
+        raise PipelineError("--no-llm is forbidden. This production line requires LLM-based Researcher / Writer / Reviewer execution.")
 
-    state = run_workflow(args.seed, notes, profiles, forbidden_terms, args.source_dir, args.reviews_dir, not args.no_llm)
+    state = run_workflow(args.seed, notes, profiles, forbidden_terms, args.source_dir, args.reviews_dir)
     if state.get("blocked"):
         raise PipelineError("Reviewer blocked the article after %s revision(s): %s" % (state.get("revision_count", 0), ", ".join(state.get("review_findings", []))))
     article = validate_article(state["article"], state.get("strict_terms", []))

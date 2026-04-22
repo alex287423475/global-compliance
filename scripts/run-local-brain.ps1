@@ -5,7 +5,6 @@ param(
   [string]$SourceDir = "local-brain/knowledge",
   [string]$ReviewsDir = "local-brain/reviews",
   [switch]$Overwrite,
-  [switch]$NoLlm,
   [switch]$Publish
 )
 
@@ -67,10 +66,6 @@ foreach ($Item in $Seeds) {
 
   if ($Overwrite) {
     $Args += "--overwrite"
-  }
-
-  if ($NoLlm) {
-    $Args += "--no-llm"
   }
 
   & $LocalBrainPython @Args

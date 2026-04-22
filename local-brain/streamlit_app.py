@@ -308,7 +308,10 @@ tab_generate, tab_review, tab_validate, tab_publish, tab_config = st.tabs(
 with tab_generate:
     st.subheader("启动多智能体生产")
     seed_mode = st.radio("生产模式", ["单个种子词", "批量种子词"], horizontal=True)
-    use_llm = st.checkbox("启用 LLM 生成与审稿", value=llm_ready, disabled=not llm_ready)
+    if llm_ready:
+        st.success("LLM 已配置。生产线将强制使用 Researcher / Writer / Reviewer 模型协作。")
+    else:
+        st.error("LLM 未配置。生产线已锁定，禁止无 LLM 干跑。请先到“5. 配置”填写并测试 API Key。")
     operator_notes = st.text_area(
         "补充资料 / 运营备注，可留空",
         value="",
@@ -319,7 +322,7 @@ with tab_generate:
     if seed_mode == "单个种子词":
         seed = st.text_input("种子词", value="智能宠物喂食器")
         overwrite = st.checkbox("允许覆盖同名草稿", value=False)
-        if st.button("运行 Researcher -> Writer -> Reviewer", type="primary"):
+        if st.button("运行 Researcher -> Writer -> Reviewer", type="primary", disabled=not llm_ready):
             if not seed.strip():
                 st.warning("请先输入种子词。")
             else:
@@ -337,14 +340,12 @@ with tab_generate:
                     args.extend(["--notes-file", rel(write_temp_notes(operator_notes))])
                 if overwrite:
                     args.append("--overwrite")
-                if not use_llm:
-                    args.append("--no-llm")
                 code, output = run_command(args, timeout=360)
                 show_command_result(code, output, "生产线已完成，草稿已生成")
     else:
         seed_text = st.text_area("批量种子词，每行一个", value=read_seed_text(), height=220)
         overwrite_batch = st.checkbox("批量覆盖同名草稿", value=False)
-        if st.button("批量运行生产线", type="primary"):
+        if st.button("批量运行生产线", type="primary", disabled=not llm_ready):
             SEEDS_FILE.write_text(seed_text.strip() + "\n", encoding="utf-8")
             args = [
                 "powershell",
@@ -356,8 +357,6 @@ with tab_generate:
             ]
             if overwrite_batch:
                 args.append("-Overwrite")
-            if not use_llm:
-                args.append("-NoLlm")
             code, output = run_command(args, timeout=600)
             show_command_result(code, output, "批量生产完成并通过干跑校验")
 
