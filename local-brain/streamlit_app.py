@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -305,18 +306,22 @@ def test_llm_connection(config, timeout=30):
         method="POST",
     )
 
+    transient_errors = []
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            response_data = json.loads(response.read().decode("utf-8"))
-    except TimeoutError:
-        return False, "请求超过 %s 秒未返回。请检查代理、Base URL 或模型服务是否可达。" % timeout
-    except socket.timeout:
-        return False, "请求超过 %s 秒未返回。请检查代理、Base URL 或模型服务是否可达。" % timeout
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        return False, "HTTP %s: %s" % (exc.code, body[:800])
-    except urllib.error.URLError as exc:
-        return False, "网络连接失败：%s" % exc
+        for attempt in range(1, 4):
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    response_data = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                return False, "HTTP %s: %s" % (exc.code, body[:800])
+            except (TimeoutError, socket.timeout, ssl.SSLError, urllib.error.URLError) as exc:
+                reason = getattr(exc, "reason", exc)
+                transient_errors.append(str(reason))
+                if attempt >= 3:
+                    return False, "网络连接失败，已重试 3 次：%s" % " | ".join(transient_errors[-3:])
+                time.sleep(1.5 * attempt)
     except Exception as exc:
         return False, "测试失败：%s" % exc
 

@@ -4,7 +4,9 @@ import hashlib
 import json
 import os
 import re
+import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 import ssl
@@ -270,23 +272,24 @@ class OpenAICompatibleClient:
             },
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                raw = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise PipelineError("LLM request failed: HTTP %s %s" % (exc.code, body[:800]))
-        except ssl.SSLError as exc:
-            raise PipelineError(
-                "LLM SSL connection failed. Check API Base URL, proxy/VPN, and provider endpoint. Details: %s"
-                % exc
-            )
-        except urllib.error.URLError as exc:
-            reason = getattr(exc, "reason", exc)
-            raise PipelineError(
-                "LLM network request failed. Check API Base URL, proxy/VPN, and provider endpoint. Details: %s"
-                % reason
-            )
+        transient_errors = []
+        for attempt in range(1, 4):
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    raw = response.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise PipelineError("LLM request failed: HTTP %s %s" % (exc.code, body[:800]))
+            except (TimeoutError, socket.timeout, ssl.SSLError, urllib.error.URLError) as exc:
+                reason = getattr(exc, "reason", exc)
+                transient_errors.append(str(reason))
+                if attempt >= 3:
+                    raise PipelineError(
+                        "LLM network request failed after 3 attempts. Check API Base URL, proxy/VPN, and provider endpoint. Details: %s"
+                        % " | ".join(transient_errors[-3:])
+                    )
+                time.sleep(1.5 * attempt)
 
         response_data = json.loads(raw)
         content = response_data["choices"][0]["message"]["content"]
