@@ -10,3 +10,5 @@ yarn-error.log*
 pnpm-debug.log*
 
 .vercel
+local-brain/seeds.txt
+local-brain/tmp-drafts/

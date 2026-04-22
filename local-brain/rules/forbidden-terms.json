@@ -1,0 +1,34 @@
+{
+  "global": [
+    "guaranteed approval",
+    "risk-free return",
+    "anonymous payment",
+    "instant customs clearance",
+    "no chargeback risk",
+    "FDA certified cure"
+  ],
+  "medical_claims": [
+    "cure",
+    "treat",
+    "heal",
+    "medical grade",
+    "clinically proven",
+    "disease prevention",
+    "pain relief",
+    "anti anxiety",
+    "separation anxiety cure"
+  ],
+  "payment_claims": [
+    "guaranteed approval",
+    "no dispute risk",
+    "avoid all chargebacks",
+    "anonymous settlement",
+    "risk-free refund"
+  ],
+  "customs_claims": [
+    "instant customs clearance",
+    "guaranteed duty reduction",
+    "no inspection",
+    "zero tariff guarantee"
+  ]
+}

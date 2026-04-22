@@ -1,0 +1,105 @@
+{
+  "smart-pet-devices": {
+    "match_terms": ["pet", "feeder", "宠物", "喂食器", "猫", "狗"],
+    "category": "Payment Risk",
+    "risk_level": "High",
+    "market": "North America",
+    "safe_terms": [
+      "feeding schedule",
+      "portion control",
+      "remote monitoring",
+      "device setup",
+      "customer support",
+      "refund process"
+    ],
+    "redline_terms": [
+      "cure separation anxiety",
+      "medical grade",
+      "guaranteed behavior improvement",
+      "risk-free return"
+    ],
+    "evidence": [
+      "product page screenshots",
+      "refund and shipping policy",
+      "warranty terms",
+      "support response log",
+      "checkout screenshots"
+    ]
+  },
+  "payment-gateway-review": {
+    "match_terms": ["stripe", "paypal", "payment", "gateway", "支付", "收款", "拒付", "冻结"],
+    "category": "Payment Risk",
+    "risk_level": "Critical",
+    "market": "North America",
+    "safe_terms": [
+      "refund review window",
+      "fulfillment evidence",
+      "customer-support log",
+      "business model explanation",
+      "dispute response"
+    ],
+    "redline_terms": [
+      "guaranteed approval",
+      "anonymous payment",
+      "risk-free refund",
+      "no chargeback risk"
+    ],
+    "evidence": [
+      "gateway notice",
+      "store policies",
+      "order records",
+      "tracking records",
+      "customer communications"
+    ]
+  },
+  "amazon-marketplace": {
+    "match_terms": ["amazon", "listing", "poa", "亚马逊", "封号", "申诉"],
+    "category": "Marketplace Appeal",
+    "risk_level": "High",
+    "market": "Amazon",
+    "safe_terms": [
+      "root-cause statement",
+      "corrective action",
+      "preventive control",
+      "supplier verification",
+      "listing compliance"
+    ],
+    "redline_terms": [
+      "we did nothing wrong",
+      "system mistake",
+      "guaranteed reinstatement"
+    ],
+    "evidence": [
+      "performance notice",
+      "listing screenshots",
+      "supplier invoice",
+      "quality inspection record",
+      "corrective action log"
+    ]
+  },
+  "supply-chain": {
+    "match_terms": ["cbam", "uflpa", "supply chain", "供应链", "溯源", "清白声明"],
+    "category": "Supply Chain",
+    "risk_level": "High",
+    "market": "EU / US",
+    "safe_terms": [
+      "traceability file",
+      "supplier map",
+      "material origin",
+      "purchase record",
+      "logistics trail"
+    ],
+    "redline_terms": [
+      "unknown origin",
+      "unverified supplier",
+      "no records available"
+    ],
+    "evidence": [
+      "supplier list",
+      "purchase orders",
+      "bill of lading",
+      "factory declaration",
+      "material origin record"
+    ]
+  }
+}

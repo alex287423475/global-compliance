@@ -32,6 +32,56 @@ scripts/local-brain/
 
 ## 3. 标准工作流
 
+### 本地生产线用法
+
+如果你只是输入一个种子词，直接生成合规情报草稿：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器"
+```
+
+指定草稿输出目录：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器" -DraftDir "local-brain/drafts"
+```
+
+如果你要批量生产，先复制：
+
+```text
+local-brain/seeds.example.txt
+```
+
+为：
+
+```text
+local-brain/seeds.txt
+```
+
+然后把每个种子词一行写进去，再双击：
+
+```text
+run-local-brain.bat
+```
+
+本地生产线会执行：
+
+```text
+种子词 -> 本地情报画像 -> 红线审计 -> 内容铸造 -> Fail-Safe 校验 -> 生成 JSON 草稿
+```
+
+默认只生成草稿，不自动上线。确认草稿无误后，再双击：
+
+```text
+publish-insights.bat
+```
+
+如果你确认要生成后立刻发布，可以执行：
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器" -Publish
+```
+
 ### 最简单用法
 
 把 AI 生成的文章 JSON 放进：
