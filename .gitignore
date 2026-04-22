@@ -12,4 +12,7 @@ pnpm-debug.log*
 .vercel
 local-brain/seeds.txt
 local-brain/tmp-drafts/
+local-brain/tmp-audits/
 __pycache__/
+.venv-local-brain/
+local-brain/audits/

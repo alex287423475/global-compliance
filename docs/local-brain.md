@@ -52,10 +52,21 @@ http://127.0.0.1:8501
 输入种子词 -> 批量生成草稿 -> 审阅文章 -> Fail-Safe 校验 -> 发布到 GitHub/Vercel
 ```
 
+当前多智能体流程由 LangGraph StateGraph 编排：
+
+```text
+Researcher Agent -> Writer Agent -> Reviewer Agent
+                         ^             |
+                         |             v
+                    高危词命中 <- 条件边打回重写
+```
+
+说明：LangGraph 官方 Python 包要求 Python 3.10+。本项目的启动脚本会自动创建 `.venv-local-brain`，优先使用 Codex 自带 Python 3.12，并安装 Streamlit 与 LangGraph。
+
 如果提示没有 Streamlit，先执行：
 
 ```bash
-python -m pip install -r requirements-local-brain.txt
+powershell -ExecutionPolicy Bypass -File scripts/ensure-local-brain-env.ps1
 ```
 
 ### 本地生产线用法

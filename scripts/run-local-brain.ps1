@@ -10,6 +10,11 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
+$LocalBrainPython = Join-Path $RepoRoot ".venv-local-brain\Scripts\python.exe"
+
+if (-not (Test-Path -LiteralPath $LocalBrainPython)) {
+  $LocalBrainPython = "python"
+}
 
 function Write-Step {
   param([string]$Message)
@@ -55,7 +60,7 @@ foreach ($Item in $Seeds) {
     $Args += "--overwrite"
   }
 
-  & python @Args
+  & $LocalBrainPython @Args
 
   if ($LASTEXITCODE -ne 0) {
     throw "Generation failed for seed: $Item"

@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import streamlit as st
@@ -7,8 +8,10 @@ import streamlit as st
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DRAFT_DIR = REPO_ROOT / "local-brain" / "drafts"
+AUDIT_DIR = REPO_ROOT / "local-brain" / "audits"
 SEEDS_FILE = REPO_ROOT / "local-brain" / "seeds.txt"
 EXAMPLE_SEEDS_FILE = REPO_ROOT / "local-brain" / "seeds.example.txt"
+PYTHON_EXE = sys.executable
 
 
 st.set_page_config(
@@ -84,12 +87,15 @@ with st.sidebar:
     st.code(str(REPO_ROOT), language="text")
     st.write("草稿目录")
     st.code(rel(DRAFT_DIR), language="text")
+    st.write("Python")
+    st.code(PYTHON_EXE, language="text")
 
     st.header("安全原则")
     st.markdown(
         "- 默认只生成草稿，不自动上线。\n"
-        "- 发布前必须先通过 Fail-Safe 校验。\n"
-        "- 高危词会阻断生产线。\n"
+        "- Researcher / Writer / Reviewer 通过 LangGraph 状态机协作。\n"
+        "- Reviewer 发现高危词会打回 Writer 重写。\n"
+        "- 超过重写上限仍不合格时，Fail-Safe 才会阻断。\n"
         "- 发布按钮会触发 git commit / git push。"
     )
 
@@ -112,7 +118,7 @@ with tab_generate:
                 st.warning("请先输入种子词。")
             else:
                 args = [
-                    "python",
+                    PYTHON_EXE,
                     "scripts/local-brain/generate-insight.py",
                     "--seed",
                     seed.strip(),
@@ -150,11 +156,11 @@ with tab_generate:
                 show_command_result(code, output, "批量草稿已生成并通过干跑校验")
 
     st.divider()
-    st.subheader("Fail-Safe 快速测试")
-    st.caption("这个测试会故意输入高危医疗暗示，正常结果应该是阻断。")
-    if st.button("测试高危词阻断"):
+    st.subheader("Reviewer 重写测试")
+    st.caption("这个测试会故意输入高危医疗暗示，正常结果应该是 Reviewer 打回，Writer 重写后通过。")
+    if st.button("测试 Reviewer 打回重写"):
         args = [
-            "python",
+            PYTHON_EXE,
             "scripts/local-brain/generate-insight.py",
             "--seed",
             "cure pet anxiety",
@@ -163,10 +169,10 @@ with tab_generate:
             "--overwrite",
         ]
         code, output = run_command(args)
-        if code != 0:
-            st.success("Fail-Safe 已按预期阻断")
+        if code == 0:
+            st.success("Reviewer 已按预期打回并完成安全重写")
         else:
-            st.error("Fail-Safe 没有阻断，请检查 forbidden-terms.json")
+            st.error("重写失败，Fail-Safe 已阻断")
         if output:
             st.code(output, language="text")
 
@@ -209,6 +215,11 @@ with tab_review:
 
         with st.expander("查看原始 JSON"):
             st.json(article)
+
+        audit_path = AUDIT_DIR / ("%s.audit.json" % article.get("slug", selected.stem))
+        if audit_path.exists():
+            with st.expander("查看多智能体审计轨迹"):
+                st.json(read_json(audit_path))
 
         st.download_button(
             "下载当前 JSON",
