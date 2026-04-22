@@ -52,6 +52,8 @@ http://127.0.0.1:8501
 输入种子词 -> 批量生成草稿 -> 审阅文章 -> Fail-Safe 校验 -> 发布到 GitHub/Vercel
 ```
 
+打开后先看 `0. 工作流可视化`，可以看到 LangGraph 状态机图，并点击“启动工作流”观察 Reviewer 如何把高危初稿打回 Writer 重写。
+
 当前多智能体流程由 LangGraph StateGraph 编排：
 
 ```text

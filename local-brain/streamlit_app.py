@@ -78,6 +78,60 @@ def draft_label(path):
         return path.name
 
 
+def latest_audit_file():
+    candidates = []
+    for directory in [AUDIT_DIR, REPO_ROOT / "local-brain" / "tmp-audits"]:
+        if directory.exists():
+            candidates.extend(directory.glob("*.audit.json"))
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda item: item.stat().st_mtime, reverse=True)[0]
+
+
+def render_workflow_graph():
+    st.graphviz_chart(
+        """
+        digraph LocalBrain {
+          graph [rankdir=LR, bgcolor="transparent", pad="0.3", nodesep="0.6", ranksep="0.7"];
+          node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, color="#172554", penwidth=1.2, fillcolor="#f8fafc", fontcolor="#172554"];
+          edge [fontname="Arial", fontsize=10, color="#475569", fontcolor="#475569"];
+
+          start [label="Seed Keyword", shape=oval, fillcolor="#ffffff"];
+          researcher [label="Researcher Agent\\nRAG / VOC / red lines"];
+          writer [label="Writer Agent\\nSEO title / warning block / guide"];
+          reviewer [label="Reviewer Agent\\nredline scan / tone audit"];
+          approved [label="Approved Draft\\nJSON asset", shape=oval, fillcolor="#ecfdf5", color="#166534"];
+          failed [label="Fail-Safe Block\\ndead-letter / no publish", shape=oval, fillcolor="#fef2f2", color="#991b1b"];
+
+          start -> researcher;
+          researcher -> writer [label="research_data + red_lines"];
+          writer -> reviewer [label="draft_content"];
+          reviewer -> approved [label="PASS"];
+          reviewer -> writer [label="REJECT: rewrite", color="#991b1b", fontcolor="#991b1b"];
+          reviewer -> failed [label="revision_count >= limit", color="#991b1b", fontcolor="#991b1b"];
+        }
+        """,
+        use_container_width=True,
+    )
+
+
+def render_audit_trace(audit):
+    trace = audit.get("trace", [])
+    if not trace:
+        st.info("暂无审计轨迹。")
+        return
+
+    for index, item in enumerate(trace, start=1):
+        agent = item.get("agent", "Unknown")
+        action = item.get("action", "")
+        data = item.get("data", {})
+        with st.container(border=True):
+            st.markdown("**%02d · %s**" % (index, agent))
+            st.write(action)
+            if data:
+                st.json(data)
+
+
 st.title("Local Brain 合规文章生产线")
 st.caption("本地运行：种子词 -> 情报画像 -> 红线审计 -> 内容铸造 -> Fail-Safe 校验 -> JSON 草稿 -> 人工确认 -> 一键发布")
 
@@ -100,9 +154,54 @@ with st.sidebar:
     )
 
 
-tab_generate, tab_review, tab_validate, tab_publish = st.tabs(
-    ["1. 生产草稿", "2. 审阅草稿", "3. 校验", "4. 发布"]
+tab_visual, tab_generate, tab_review, tab_validate, tab_publish = st.tabs(
+    ["0. 工作流可视化", "1. 生产草稿", "2. 审阅草稿", "3. 校验", "4. 发布"]
 )
+
+
+with tab_visual:
+    st.subheader("LangGraph 多智能体协作流")
+    st.caption("Researcher 负责情报和红线，Writer 负责起草，Reviewer 负责打回或放行。")
+    render_workflow_graph()
+
+    st.divider()
+    st.subheader("对抗样例")
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        demo_seed = st.text_input("演示种子词", value="cure pet anxiety")
+    with col_b:
+        st.write("")
+        st.write("")
+        run_demo = st.button("启动工作流", type="primary")
+
+    if run_demo:
+        args = [
+            PYTHON_EXE,
+            "scripts/local-brain/generate-insight.py",
+            "--seed",
+            demo_seed.strip() or "cure pet anxiety",
+            "--draft-dir",
+            "local-brain/tmp-drafts",
+            "--audit-dir",
+            "local-brain/tmp-audits",
+            "--overwrite",
+        ]
+        code, output = run_command(args, timeout=180)
+        show_command_result(code, output, "工作流运行完成")
+
+    audit_file = latest_audit_file()
+    if audit_file:
+        audit = read_json(audit_file)
+        st.divider()
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Runtime", audit.get("runtime", "unknown"))
+        c2.metric("Profile", audit.get("profile", "unknown"))
+        c3.metric("Revisions", audit.get("revision_count", 0))
+        c4.metric("Review", "PASS" if audit.get("review_passed") else "REJECT")
+        st.caption("当前审计文件：%s" % rel(audit_file))
+        render_audit_trace(audit)
+    else:
+        st.info("还没有审计记录。点击“启动工作流”生成一条可视化轨迹。")
 
 
 with tab_generate:
