@@ -19,6 +19,7 @@
     "bodyMarkdown",
     "zhBodyMarkdown",
     "toc",
+    "intelligenceCards",
     "faq",
     "relatedKeywords",
     "redlineTerms"
@@ -120,6 +121,53 @@
             "type": "integer",
             "minimum": 2,
             "maximum": 3
+          }
+        }
+      }
+    },
+    "intelligenceCards": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["label", "zhLabel", "finding", "zhFinding", "evidence", "zhEvidence", "action", "zhAction", "severity"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 4
+          },
+          "zhLabel": {
+            "type": "string",
+            "minLength": 2
+          },
+          "finding": {
+            "type": "string",
+            "minLength": 60
+          },
+          "zhFinding": {
+            "type": "string",
+            "minLength": 30
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 40
+          },
+          "zhEvidence": {
+            "type": "string",
+            "minLength": 20
+          },
+          "action": {
+            "type": "string",
+            "minLength": 40
+          },
+          "zhAction": {
+            "type": "string",
+            "minLength": 20
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["Critical", "High", "Medium", "Watch"]
           }
         }
       }

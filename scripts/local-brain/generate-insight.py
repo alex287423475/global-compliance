@@ -254,6 +254,43 @@ def build_markdown_article(
         parts.append(introduction.strip())
     if takeaways:
         parts.append("## Key Takeaways\n\n" + "\n".join("- %s" % first_string(item) for item in takeaways[:5] if first_string(item)))
+    cards = article.get("intelligenceCards", [])
+    if isinstance(cards, list) and cards:
+        if locale == "en":
+            table_lines = [
+                "## Intelligence Card Summary",
+                "",
+                "| Signal | Evidence | Operational Response |",
+                "| --- | --- | --- |",
+            ]
+            for card in cards[:4]:
+                if isinstance(card, dict):
+                    table_lines.append(
+                        "| %s | %s | %s |"
+                        % (
+                            first_string(card.get("finding")).replace("|", "/"),
+                            first_string(card.get("evidence")).replace("|", "/"),
+                            first_string(card.get("action")).replace("|", "/"),
+                        )
+                    )
+        else:
+            table_lines = [
+                "## Intelligence Card Summary",
+                "",
+                "| Signal | Evidence | Operational Response |",
+                "| --- | --- | --- |",
+            ]
+            for card in cards[:4]:
+                if isinstance(card, dict):
+                    table_lines.append(
+                        "| %s | %s | %s |"
+                        % (
+                            first_string(card.get("zhFinding"), first_string(card.get("finding"))).replace("|", "/"),
+                            first_string(card.get("zhEvidence"), first_string(card.get("evidence"))).replace("|", "/"),
+                            first_string(card.get("zhAction"), first_string(card.get("action"))).replace("|", "/"),
+                        )
+                    )
+        parts.append("\n".join(table_lines))
     for section in sections:
         heading = first_string(section.get("heading" if locale == "en" else "zhHeading"))
         body = first_string(section.get("body" if locale == "en" else "zhBody"))
@@ -394,6 +431,74 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     normalized["zhKeyTakeaways"] = [first_string(item) for item in zh_takeaways if first_string(item)]
     if len(normalized["zhKeyTakeaways"]) < 3:
         normalized["zhKeyTakeaways"] = list(normalized["keyTakeaways"])
+
+    cards = normalized.get("intelligenceCards", [])
+    if not isinstance(cards, list):
+        cards = []
+    cleaned_cards = []
+    for item in cards:
+        if not isinstance(item, dict):
+            continue
+        finding = articleize_text(first_string(item.get("finding")))
+        evidence = articleize_text(first_string(item.get("evidence")))
+        action = articleize_text(first_string(item.get("action")))
+        if finding and evidence and action:
+            severity = first_string(item.get("severity"), normalized["riskLevel"])
+            if severity not in {"Critical", "High", "Medium", "Watch"}:
+                severity = normalized["riskLevel"] if normalized["riskLevel"] in {"Critical", "High", "Medium"} else "Watch"
+            cleaned_cards.append(
+                {
+                    "label": first_string(item.get("label"), "Risk Signal"),
+                    "zhLabel": first_string(item.get("zhLabel"), first_string(item.get("label"), "Risk Signal")),
+                    "finding": finding,
+                    "zhFinding": first_string(item.get("zhFinding"), finding),
+                    "evidence": evidence,
+                    "zhEvidence": first_string(item.get("zhEvidence"), evidence),
+                    "action": action,
+                    "zhAction": first_string(item.get("zhAction"), action),
+                    "severity": severity,
+                }
+            )
+    if len(cleaned_cards) < 3:
+        evidence_files = state.get("evidence", [])[:3]
+        if not evidence_files:
+            evidence_files = ["policy screenshots", "support logs", "checkout captures"]
+        cleaned_cards = [
+            {
+                "label": "Claim Boundary",
+                "zhLabel": "Claim Boundary",
+                "finding": "The safest public copy describes documented operations and customer limits instead of implying guaranteed outcomes or invisible review friction.",
+                "zhFinding": "The safest public copy describes documented operations and customer limits instead of implying guaranteed outcomes or invisible review friction.",
+                "evidence": "Compare product pages, policy pages, checkout captures, and support replies for consistency before scale.",
+                "zhEvidence": "Compare product pages, policy pages, checkout captures, and support replies for consistency before scale.",
+                "action": "Rewrite the public page around verifiable process language and move sensitive phrases into the internal redline list.",
+                "zhAction": "Rewrite the public page around verifiable process language and move sensitive phrases into the internal redline list.",
+                "severity": normalized["riskLevel"] if normalized["riskLevel"] in {"Critical", "High", "Medium"} else "High",
+            },
+            {
+                "label": "Evidence Gap",
+                "zhLabel": "Evidence Gap",
+                "finding": "The article becomes commercially useful only when its claims can be backed by evidence files that already exist before review pressure appears.",
+                "zhFinding": "The article becomes commercially useful only when its claims can be backed by evidence files that already exist before review pressure appears.",
+                "evidence": "Minimum files include %s." % ", ".join(evidence_files),
+                "zhEvidence": "Minimum files include %s." % ", ".join(evidence_files),
+                "action": "Create a versioned evidence folder before publishing or scaling traffic to the category page.",
+                "zhAction": "Create a versioned evidence folder before publishing or scaling traffic to the category page.",
+                "severity": "High",
+            },
+            {
+                "label": "Support Alignment",
+                "zhLabel": "Support Alignment",
+                "finding": "Refund, delivery, and support language should describe the same operating reality across the article, policy pages, and customer-service replies.",
+                "zhFinding": "Refund, delivery, and support language should describe the same operating reality across the article, policy pages, and customer-service replies.",
+                "evidence": "Review support tickets, refund templates, shipping policy text, and checkout promises for conflicting timelines or outcomes.",
+                "zhEvidence": "Review support tickets, refund templates, shipping policy text, and checkout promises for conflicting timelines or outcomes.",
+                "action": "Use one controlled wording set for SEO pages, policy pages, and support templates so review teams see a coherent record.",
+                "zhAction": "Use one controlled wording set for SEO pages, policy pages, and support templates so review teams see a coherent record.",
+                "severity": "Medium",
+            },
+        ]
+    normalized["intelligenceCards"] = cleaned_cards[:6]
 
     sections = normalized.get("sections", [])
     if not isinstance(sections, list):
@@ -860,6 +965,41 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
         ],
         "redlineTerms": state.get("redline_terms", [])[:8],
         "relatedKeywords": list(dict.fromkeys([safe_seed, seed_title, market] + safe_terms + evidence_items))[:8],
+        "intelligenceCards": [
+            {
+                "label": "Claim Boundary",
+                "zhLabel": "Claim Boundary",
+                "finding": "Public copy for %s should explain documented operating boundaries rather than compressing customer uncertainty into absolute outcomes." % seed_title,
+                "zhFinding": "Public copy for %s should explain documented operating boundaries rather than compressing customer uncertainty into absolute outcomes." % safe_seed,
+                "evidence": "Compare product descriptions, checkout language, refund policy screenshots, and support replies for the same operating reality.",
+                "zhEvidence": "Compare product descriptions, checkout language, refund policy screenshots, and support replies for the same operating reality.",
+                "action": "Rewrite high-intent page language around verifiable operations and keep sensitive phrases in the internal redline watchlist.",
+                "zhAction": "Rewrite high-intent page language around verifiable operations and keep sensitive phrases in the internal redline watchlist.",
+                "severity": profile.get("risk_level", "High"),
+            },
+            {
+                "label": "Evidence File",
+                "zhLabel": "Evidence File",
+                "finding": "The article becomes defensible only when the page claims can be traced to evidence files before a payment review, dispute, or platform check appears.",
+                "zhFinding": "The article becomes defensible only when the page claims can be traced to evidence files before a payment review, dispute, or platform check appears.",
+                "evidence": "Minimum file set: %s." % evidence_text,
+                "zhEvidence": "Minimum file set: %s." % evidence_text,
+                "action": "Create a versioned evidence folder and reference that file set when updating SEO pages, policy pages, and support templates.",
+                "zhAction": "Create a versioned evidence folder and reference that file set when updating SEO pages, policy pages, and support templates.",
+                "severity": "High",
+            },
+            {
+                "label": "Support Reality",
+                "zhLabel": "Support Reality",
+                "finding": "Support replies, refund handling, and delivery explanations can quietly contradict the public article even when the article itself sounds controlled.",
+                "zhFinding": "Support replies, refund handling, and delivery explanations can quietly contradict the public article even when the article itself sounds controlled.",
+                "evidence": "Use support logs, refund decisions, and delivery timelines to test whether the article describes the same reality customers experience.",
+                "zhEvidence": "Use support logs, refund decisions, and delivery timelines to test whether the article describes the same reality customers experience.",
+                "action": "Align customer-service templates with the article before scaling traffic or launching paid acquisition into the page.",
+                "zhAction": "Align customer-service templates with the article before scaling traffic or launching paid acquisition into the page.",
+                "severity": "Medium",
+            },
+        ],
         "sections": [
             {
                 "heading": "Why %s starts drawing review before the seller notices" % seed_title,
@@ -1014,6 +1154,19 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
                 "bodyMarkdown": "Long-form markdown article with 5-8 H2/H3 headings, at least 900 English words, lists, and embedded CTA",
                 "zhBodyMarkdown": "Localized markdown article",
                 "toc": [{"id": "heading-id", "label": "English heading", "zhLabel": "Chinese heading", "level": 2}],
+                "intelligenceCards": [
+                    {
+                        "label": "short card label",
+                        "zhLabel": "Chinese label",
+                        "finding": "extractable finding tied to the category and market",
+                        "zhFinding": "Chinese finding",
+                        "evidence": "supporting evidence or file class",
+                        "zhEvidence": "Chinese evidence",
+                        "action": "recommended operational response",
+                        "zhAction": "Chinese action",
+                        "severity": "Critical|High|Medium|Watch",
+                    }
+                ],
                 "faq": [{"question": "", "answer": "", "zhQuestion": "", "zhAnswer": ""}],
                 "relatedKeywords": ["keyword variants"],
                 "redlineTerms": ["terms"],
@@ -1023,7 +1176,7 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
             },
         }
         article = llm.chat_json(
-            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. The output must read like a real website article a buyer would read end to end: headline, SEO metadata, deck, introduction, key takeaways, 5-8 developed H2/H3 sections, FAQ, and conclusion. bodyMarkdown is the primary article body and must be a real long-form markdown article, not section fragments pasted together. Each major section should have 2-4 developed paragraphs. Include one bullet list, one short warning or quote block, and one embedded CTA sentence about diagnostic review. redlineTerms must list forbidden phrases that should stay out of public-facing copy; do not rewrite those warning phrases into euphemisms. Avoid every red line term exactly and semantically in the title, meta description, deck, summary, introduction, markdown body, FAQ answers, and conclusion. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
+            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. The output must read like a real website article a buyer would read end to end: headline, SEO metadata, deck, introduction, key takeaways, 5-8 developed H2/H3 sections, FAQ, and conclusion. bodyMarkdown is the primary article body and must be a real long-form markdown article, not section fragments pasted together. Each major section should have 2-4 developed paragraphs. Include one bullet list, one short warning or quote block, at least one markdown table comparing risk signal / evidence / operational response, and one embedded CTA sentence about diagnostic review. Also return 3-6 intelligenceCards. Each intelligence card must summarize one extractable conclusion with finding, evidence, action, and severity so AI answer engines and fast readers can lift the card without losing context. redlineTerms must list forbidden phrases that should stay out of public-facing copy; do not rewrite those warning phrases into euphemisms. Avoid every red line term exactly and semantically in the title, meta description, deck, summary, introduction, markdown body, FAQ answers, and conclusion. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
             json.dumps(payload, ensure_ascii=False),
             temperature=0.35,
         )
@@ -1067,6 +1220,20 @@ def publishable_text(article: Dict[str, Any]) -> str:
     parts.extend(article.get("keyTakeaways", []))
     parts.extend(article.get("zhKeyTakeaways", []))
     parts.extend(article.get("relatedKeywords", []))
+    for item in article.get("intelligenceCards", []):
+        if isinstance(item, dict):
+            parts.extend(
+                [
+                    item.get("label", ""),
+                    item.get("zhLabel", ""),
+                    item.get("finding", ""),
+                    item.get("zhFinding", ""),
+                    item.get("evidence", ""),
+                    item.get("zhEvidence", ""),
+                    item.get("action", ""),
+                    item.get("zhAction", ""),
+                ]
+            )
     for section in article.get("sections", []):
         parts.extend([section.get("heading", ""), section.get("zhHeading", ""), section.get("body", ""), section.get("zhBody", "")])
     for item in article.get("faq", []):
@@ -1096,6 +1263,8 @@ def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
         findings.append("missing body markdown")
     if not article.get("faq") or len(article.get("faq", [])) < 3:
         findings.append("missing faq")
+    if not article.get("intelligenceCards") or len(article.get("intelligenceCards", [])) < 3:
+        findings.append("missing intelligence cards")
     if not article.get("toc") or len(article.get("toc", [])) < 5:
         findings.append("missing toc")
     if len(article.get("sections", [])) < 4:
@@ -1112,6 +1281,8 @@ def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
     markdown_headings = re.findall(r"^##+\s+.+$", first_string(article.get("bodyMarkdown")), flags=re.MULTILINE)
     if len(markdown_headings) < 5:
         findings.append("not enough markdown headings")
+    if not re.search(r"\|[^\n]+\|", first_string(article.get("bodyMarkdown"))):
+        findings.append("missing markdown evidence table")
     if any(term in publishable_text(article).lower() for term in ["best ever", "miracle", "easy money", "100 percent"]):
         findings.append("overpromising marketing tone")
     feedback = "Remove forbidden or overpromising language and rewrite with evidence-bounded claims: %s" % ", ".join(findings)
@@ -1206,6 +1377,7 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
         "bodyMarkdown",
         "zhBodyMarkdown",
         "toc",
+        "intelligenceCards",
         "faq",
         "relatedKeywords",
         "redlineTerms",
@@ -1232,6 +1404,18 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
         errors.append("zhKeyTakeaways must contain at least three bullets")
     if not isinstance(article.get("relatedKeywords"), list) or len(article.get("relatedKeywords", [])) < 6:
         errors.append("relatedKeywords must contain at least six keyword variants")
+    if not isinstance(article.get("intelligenceCards"), list) or len(article.get("intelligenceCards", [])) < 3:
+        errors.append("intelligenceCards must contain at least three cards")
+    else:
+        for index, item in enumerate(article.get("intelligenceCards", [])):
+            if not isinstance(item, dict):
+                errors.append("intelligenceCards[%d] must be an object" % index)
+                continue
+            for field in ["label", "zhLabel", "finding", "zhFinding", "evidence", "zhEvidence", "action", "zhAction", "severity"]:
+                if not first_string(item.get(field)):
+                    errors.append("intelligenceCards[%d] missing field: %s" % (index, field))
+            if item.get("severity") not in {"Critical", "High", "Medium", "Watch"}:
+                errors.append("intelligenceCards[%d].severity is not allowed" % index)
     if not isinstance(article.get("faq"), list) or len(article.get("faq", [])) < 3:
         errors.append("faq must contain at least three entries")
     else:
@@ -1259,6 +1443,8 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
     markdown_headings = re.findall(r"^##+\s+.+$", first_string(article.get("bodyMarkdown")), flags=re.MULTILINE)
     if len(markdown_headings) < 5:
         errors.append("bodyMarkdown should contain at least five H2/H3 headings")
+    if not re.search(r"\|[^\n]+\|", first_string(article.get("bodyMarkdown"))):
+        errors.append("bodyMarkdown should contain at least one markdown table")
     if len(publishable_text(article)) < 6000:
         errors.append("article is too thin for publication")
     hits = contains_any(publishable_text(article), strict_terms)

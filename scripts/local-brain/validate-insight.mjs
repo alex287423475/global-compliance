@@ -55,6 +55,7 @@ export function validateInsight(article) {
     "bodyMarkdown",
     "zhBodyMarkdown",
     "toc",
+    "intelligenceCards",
     "faq",
     "relatedKeywords",
     "redlineTerms",
@@ -116,6 +117,40 @@ export function validateInsight(article) {
     });
   }
 
+  if (!Array.isArray(article.intelligenceCards) || article.intelligenceCards.length < 3) {
+    errors.push("intelligenceCards must contain at least three extractable cards");
+  } else {
+    article.intelligenceCards.forEach((item, index) => {
+      for (const field of [
+        "label",
+        "zhLabel",
+        "finding",
+        "zhFinding",
+        "evidence",
+        "zhEvidence",
+        "action",
+        "zhAction",
+        "severity",
+      ]) {
+        if (!item[field]) {
+          errors.push(`intelligenceCards[${index}] missing field: ${field}`);
+        }
+      }
+      if (item.finding && item.finding.length < 60) {
+        errors.push(`intelligenceCards[${index}].finding is too short`);
+      }
+      if (item.evidence && item.evidence.length < 40) {
+        errors.push(`intelligenceCards[${index}].evidence is too short`);
+      }
+      if (item.action && item.action.length < 40) {
+        errors.push(`intelligenceCards[${index}].action is too short`);
+      }
+      if (item.severity && !["Critical", "High", "Medium", "Watch"].includes(item.severity)) {
+        errors.push(`intelligenceCards[${index}].severity is not allowed`);
+      }
+    });
+  }
+
   if (!Array.isArray(article.faq) || article.faq.length < 3) {
     errors.push("faq must contain at least three items");
   } else {
@@ -144,6 +179,10 @@ export function validateInsight(article) {
   const headings = collectHeadings(article.bodyMarkdown);
   if (headings.length < 5) {
     errors.push("bodyMarkdown must contain at least five H2/H3 headings");
+  }
+
+  if (!/\|[^\n]+\|/.test(String(article.bodyMarkdown || ""))) {
+    errors.push("bodyMarkdown should contain at least one markdown table");
   }
 
   const faqQuestions = Array.isArray(article.faq) ? article.faq.map((item) => item.question) : [];

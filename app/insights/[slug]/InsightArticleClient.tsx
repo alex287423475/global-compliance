@@ -4,7 +4,7 @@ import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { InsightArticle, InsightFaqItem, InsightTocItem } from "../../../content/insights";
+import type { InsightArticle, InsightCard, InsightFaqItem, InsightTocItem } from "../../../content/insights";
 import SiteHeader from "../../components/SiteHeader";
 
 type Locale = "en" | "zh";
@@ -14,6 +14,7 @@ const copy = {
     updated: "Updated",
     readTime: "Read Time",
     redline: "Redline Terms",
+    cards: "Intelligence Cards",
     toc: "On This Page",
     faq: "FAQ",
     nextStep: "Next Step",
@@ -25,11 +26,15 @@ const copy = {
     recommended: "Recommended Reading",
     read: "Read Article",
     minutes: "min read",
+    evidence: "Evidence",
+    action: "Action",
+    keywords: "Keywords",
   },
   zh: {
     updated: "更新日期",
     readTime: "阅读时长",
     redline: "红线词",
+    cards: "情报卡",
     toc: "本文目录",
     faq: "常见问题",
     nextStep: "下一步",
@@ -41,6 +46,9 @@ const copy = {
     recommended: "推荐阅读",
     read: "阅读全文",
     minutes: "分钟阅读",
+    evidence: "证据",
+    action: "动作",
+    keywords: "关键词",
   },
 };
 
@@ -70,6 +78,15 @@ const markdownComponents: Components = {
       {children}
     </blockquote>
   ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto border border-blue-900/10 bg-white">
+      <table className="w-full border-collapse text-left text-sm">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-slate-100 text-blue-950">{children}</thead>,
+  tbody: ({ children }) => <tbody className="divide-y divide-blue-900/10">{children}</tbody>,
+  th: ({ children }) => <th className="px-4 py-3 font-bold">{children}</th>,
+  td: ({ children }) => <td className="px-4 py-4 align-top leading-7 text-slate-600">{children}</td>,
   a: ({ children, href }) => (
     <a className="underline decoration-blue-950/30 underline-offset-4 transition-colors hover:text-blue-950" href={href}>
       {children}
@@ -117,6 +134,7 @@ export default function InsightArticleClient({
   const dek = localizedText(locale, article.zhDek, article.dek);
   const summary = localizedText(locale, article.zhSummary, article.summary);
   const markdownBody = localizedText(locale, article.zhBodyMarkdown, article.bodyMarkdown);
+  const intelligenceCards = localizedCards(locale, article.intelligenceCards || []);
   const toc = localizedToc(locale, article.toc);
   const faq = localizedFaq(locale, article.faq);
   const readMinutes = useMemo(() => estimateReadMinutes(markdownBody), [markdownBody]);
@@ -172,6 +190,37 @@ export default function InsightArticleClient({
                 ))}
               </div>
             </div>
+
+            {intelligenceCards.length ? (
+              <section className="mb-12 border border-blue-900/10 bg-white">
+                <div className="border-b border-blue-900/10 px-6 py-5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.cards}</p>
+                </div>
+                <div className="grid divide-y divide-blue-900/10 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+                  {intelligenceCards.slice(0, 6).map((card) => (
+                    <div className="p-6" key={`${card.label}-${card.finding}`}>
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
+                        <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase text-red-800">
+                          {card.severity}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-sm font-bold leading-7 text-blue-950">{card.finding}</p>
+                      <div className="mt-5 space-y-4 text-sm leading-7 text-slate-600">
+                        <p>
+                          <span className="font-bold text-blue-950">{t.evidence}: </span>
+                          {card.evidence}
+                        </p>
+                        <p>
+                          <span className="font-bold text-blue-950">{t.action}: </span>
+                          {card.action}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <div className="prose prose-slate max-w-none space-y-8 prose-headings:scroll-mt-28">
               {markdownBody ? (
@@ -250,7 +299,7 @@ export default function InsightArticleClient({
             ) : null}
 
             <div className="border border-blue-900/10 bg-white p-6">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">Keywords</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.keywords}</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {article.relatedKeywords.map((term) => (
                   <span className="border border-slate-200 bg-slate-100 px-3 py-2 text-xs text-slate-700" key={term}>
@@ -309,6 +358,16 @@ function localizedFaq(locale: Locale, faq: InsightFaqItem[]) {
   }));
 }
 
+function localizedCards(locale: Locale, cards: InsightCard[]) {
+  return cards.map((item) => ({
+    label: localizedText(locale, item.zhLabel, item.label),
+    finding: localizedText(locale, item.zhFinding, item.finding),
+    evidence: localizedText(locale, item.zhEvidence, item.evidence),
+    action: localizedText(locale, item.zhAction, item.action),
+    severity: item.severity,
+  }));
+}
+
 function localizedText(locale: Locale, localized: string | undefined, fallback: string) {
   if (locale === "zh" && localized && !looksMojibake(localized)) {
     return localized;
@@ -351,7 +410,7 @@ function flattenChildren(node: ReactNode): string {
     return node.map(flattenChildren).join("");
   }
   if (node && typeof node === "object" && "props" in node) {
-    return flattenChildren((node as { props?: { children?: React.ReactNode } }).props?.children);
+    return flattenChildren((node as { props?: { children?: ReactNode } }).props?.children);
   }
   return "";
 }

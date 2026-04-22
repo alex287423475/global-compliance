@@ -19,6 +19,18 @@ export type InsightSection = {
   zhBody: string;
 };
 
+export type InsightCard = {
+  label: string;
+  zhLabel: string;
+  finding: string;
+  zhFinding: string;
+  evidence: string;
+  zhEvidence: string;
+  action: string;
+  zhAction: string;
+  severity: "Critical" | "High" | "Medium" | "Watch";
+};
+
 export type InsightArticle = {
   slug: string;
   title: string;
@@ -40,6 +52,7 @@ export type InsightArticle = {
   bodyMarkdown: string;
   zhBodyMarkdown: string;
   toc: InsightTocItem[];
+  intelligenceCards?: InsightCard[];
   faq: InsightFaqItem[];
   relatedKeywords: string[];
   redlineTerms: string[];
@@ -80,6 +93,48 @@ const sampleFaq = (topic: string): InsightFaqItem[] => [
     zhQuestion: "在放大流量之前应该先准备什么？",
     zhAnswer:
       "客服日志、政策截图、结账页截图、退款处理规则和履约证据都应该在放量前准备好。只有这些记录存在，文章中的说法才真正具备商业可用性。",
+  },
+];
+
+const sampleCards = (topic: string): InsightCard[] => [
+  {
+    label: "Language Mismatch",
+    zhLabel: "语言错位",
+    finding: `In ${topic}, the most visible risk is often a mismatch between public claims, policy language, and the evidence a team can actually produce.`,
+    zhFinding: `${topic} 中最容易暴露的风险，通常是公开说法、政策语言与团队实际能拿出的证据之间不一致。`,
+    evidence:
+      "Compare product pages, policy screenshots, checkout captures, support records, and dispute files before scaling traffic or submitting an appeal.",
+    zhEvidence: "在放大流量或提交申诉前，应对照产品页、政策截图、结账页、客服记录和争议文件。",
+    action:
+      "Rewrite the page around verifiable process language and keep unsupported outcome claims in the internal redline list.",
+    zhAction: "围绕可验证的流程语言重写页面，并把无法举证的结果型承诺放入内部红线清单。",
+    severity: "High",
+  },
+  {
+    label: "Evidence Gap",
+    zhLabel: "证据缺口",
+    finding: `A ${topic} article becomes commercially useful only when it points to records that can survive platform, payment, or buyer scrutiny.`,
+    zhFinding: `一篇 ${topic} 文章只有能指向经得起平台、支付机构或买家审查的记录时，才真正具备商业价值。`,
+    evidence:
+      "The minimum file usually includes screenshots, timestamps, policy versions, customer communication, and the internal decision path.",
+    zhEvidence: "最低证据包通常包括截图、时间戳、政策版本、客户沟通记录和内部决策路径。",
+    action:
+      "Build the evidence file before publishing stronger claims, then keep the article aligned with what the file can prove.",
+    zhAction: "先建立证据包，再发布更强说法，并让文章始终与证据能证明的范围保持一致。",
+    severity: "Medium",
+  },
+  {
+    label: "Diagnostic Trigger",
+    zhLabel: "诊断触发点",
+    finding: `The natural conversion point for ${topic} is not a hard sell, but the moment a reader recognizes that their own file may be thinner than their public wording.`,
+    zhFinding: `${topic} 的自然转化点不是硬销售，而是读者意识到自己的文件厚度可能支撑不了公开说法的那一刻。`,
+    evidence:
+      "High-intent readers usually arrive with a live review, appeal, payment hold, customer dispute, or supplier documentation deadline.",
+    zhEvidence: "高意向读者往往已经面对审核、申诉、资金冻结、客户争议或供应商文件截止期。",
+    action:
+      "Place the diagnostic review CTA after the article has exposed the gap between wording, operations, and proof.",
+    zhAction: "在文章揭示说法、运营和证据之间的落差之后，再放置合规风险诊断入口。",
+    severity: "Watch",
   },
 ];
 
@@ -128,6 +183,7 @@ export const insightArticles: InsightArticle[] = [
       toc("Conclusion"),
     ],
     faq: sampleFaq("independent-store payment review"),
+    intelligenceCards: sampleCards("independent-store payment review"),
     relatedKeywords: [
       "stripe account review",
       "paypal risk language",
@@ -220,6 +276,7 @@ export const insightArticles: InsightArticle[] = [
       toc("Conclusion"),
     ],
     faq: sampleFaq("Amazon POA"),
+    intelligenceCards: sampleCards("Amazon POA"),
     relatedKeywords: [
       "amazon poa root cause",
       "amazon corrective action plan",
@@ -312,6 +369,7 @@ export const insightArticles: InsightArticle[] = [
       toc("Conclusion"),
     ],
     faq: sampleFaq("supply-chain clean statements"),
+    intelligenceCards: sampleCards("supply-chain clean statements"),
     relatedKeywords: [
       "cbam clean statement",
       "uflpa supplier traceability",
