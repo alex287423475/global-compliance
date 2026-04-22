@@ -53,6 +53,10 @@ FORBIDDEN_REPLACEMENTS = {
     "treat": "address",
     "heal": "support recovery context for",
     "medical grade": "documented specification",
+    "clinically proven": "evidence-documented",
+    "disease prevention": "routine support",
+    "pain relief": "comfort-oriented use context",
+    "anti anxiety": "calming routine support",
     "anonymous payment": "privacy-aware payment",
     "instant customs clearance": "customs documentation readiness",
 }
@@ -168,6 +172,77 @@ def sanitize_claim_text(text: str) -> str:
     for source, target in sorted(FORBIDDEN_REPLACEMENTS.items(), key=lambda item: len(item[0]), reverse=True):
         cleaned = re.sub(re.escape(source), target, cleaned, flags=re.IGNORECASE)
     return cleaned
+
+
+def sanitize_article_claims(value: Any) -> Any:
+    if isinstance(value, str):
+        return sanitize_claim_text(value)
+    if isinstance(value, list):
+        return [sanitize_article_claims(item) for item in value]
+    if isinstance(value, dict):
+        return {key: sanitize_article_claims(item) for key, item in value.items()}
+    return value
+
+
+def first_string(value: Any, fallback: str = "") -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, str) and item.strip():
+                return item
+    if value is None:
+        return fallback
+    return str(value)
+
+
+def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str, Any]:
+    normalized = dict(article)
+    profile = state.get("profile", {})
+    seed = state.get("seed", "compliance asset")
+
+    normalized["slug"] = slugify(first_string(normalized.get("slug")) or seed + " compliance checklist")
+    normalized["title"] = first_string(normalized.get("title"), "%s compliance evidence checklist" % title_case_seed(seed))
+    normalized["zhTitle"] = first_string(normalized.get("zhTitle"), "%s合规证据清单" % seed)
+    normalized["summary"] = first_string(normalized.get("summary"), "A compliance intelligence brief for evidence-bounded content and review preparation.")
+    normalized["zhSummary"] = first_string(normalized.get("zhSummary"), "用于整理证据边界、合规表达和审核准备的情报简报。")
+    normalized["market"] = first_string(normalized.get("market"), profile.get("market", "North America"))
+    normalized["updatedAt"] = dt.date.today().isoformat()
+
+    category = first_string(normalized.get("category"), profile.get("category", "Payment Risk"))
+    normalized["category"] = category if category in ALLOWED_CATEGORIES else profile.get("category", "Payment Risk")
+
+    risk_level = first_string(normalized.get("riskLevel"), profile.get("risk_level", "High"))
+    normalized["riskLevel"] = risk_level if risk_level in ALLOWED_RISK_LEVELS else profile.get("risk_level", "High")
+
+    redlines = normalized.get("redlineTerms", [])
+    if not isinstance(redlines, list):
+        redlines = [first_string(redlines)]
+    normalized["redlineTerms"] = [first_string(item) for item in redlines if first_string(item)]
+    if len(normalized["redlineTerms"]) < 2:
+        normalized["redlineTerms"] = list(dict.fromkeys(normalized["redlineTerms"] + state.get("redline_terms", [])[:4]))
+
+    sections = normalized.get("sections", [])
+    if not isinstance(sections, list):
+        sections = []
+    cleaned_sections = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        cleaned_sections.append(
+            {
+                "heading": first_string(section.get("heading"), "Evidence-bounded operating language"),
+                "zhHeading": first_string(section.get("zhHeading"), "证据边界内的运营表达"),
+                "body": first_string(section.get("body"), "Keep claims tied to observable operations, policies, support records, and fulfillment evidence."),
+                "zhBody": first_string(section.get("zhBody"), "将表达限制在可观察的运营事实、政策、客服记录和履约证据内。"),
+            }
+        )
+    if len(cleaned_sections) < 2:
+        fallback = build_fallback_article(state, seed, state.get("revision_count", 0))
+        cleaned_sections = fallback["sections"]
+    normalized["sections"] = cleaned_sections
+
+    return sanitize_article_claims(normalized)
 
 
 def title_case_seed(seed: str) -> str:
@@ -539,10 +614,11 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
             },
         }
         article = llm.chat_json(
-            "You are a senior cross-border compliance architect. Write a high-conversion SEO compliance asset in a restrained, authoritative consulting tone. Avoid every red line term. Return only JSON matching the required schema.",
+            "You are a senior cross-border compliance architect. Write a high-conversion SEO compliance asset in a restrained, authoritative consulting tone. Avoid every red line term exactly and semantically. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
             json.dumps(payload, ensure_ascii=False),
             temperature=0.35,
         )
+    article = normalize_article(article, state)
 
     emit_progress(
         seed,
