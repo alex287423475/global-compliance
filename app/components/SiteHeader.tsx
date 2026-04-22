@@ -11,15 +11,17 @@ const navCopy = {
     intake: "Intake",
     procedure: "Procedure",
     review: "Private Review",
+    chinese: "中文",
   },
   zh: {
     brand: "全球博译合规",
     solutions: "解决方案",
-    toolkits: "工具包",
+    toolkits: "资产工具包",
     insights: "情报库",
-    intake: "资料收集",
-    procedure: "交付程序",
+    intake: "材料收集",
+    procedure: "交付流程",
     review: "私密评估",
+    chinese: "中文",
   },
 };
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Compliance Insight Article",
+  "title": "Compliance SEO Insight Article V2",
   "type": "object",
   "required": [
     "slug",
@@ -10,10 +10,18 @@
     "market",
     "riskLevel",
     "updatedAt",
+    "metaTitle",
+    "metaDescription",
     "summary",
     "zhSummary",
-    "redlineTerms",
-    "sections"
+    "dek",
+    "zhDek",
+    "bodyMarkdown",
+    "zhBodyMarkdown",
+    "toc",
+    "faq",
+    "relatedKeywords",
+    "redlineTerms"
   ],
   "properties": {
     "slug": {
@@ -22,11 +30,11 @@
     },
     "title": {
       "type": "string",
-      "minLength": 12
+      "minLength": 20
     },
     "zhTitle": {
       "type": "string",
-      "minLength": 6
+      "minLength": 8
     },
     "category": {
       "type": "string",
@@ -55,47 +63,140 @@
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     },
-    "summary": {
+    "metaTitle": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 80
+    },
+    "metaDescription": {
+      "type": "string",
+      "minLength": 100,
+      "maxLength": 180
+    },
+    "dek": {
       "type": "string",
       "minLength": 40
     },
-    "zhSummary": {
+    "zhDek": {
       "type": "string",
       "minLength": 20
     },
-    "redlineTerms": {
-      "type": "array",
-      "minItems": 2,
-      "items": {
-        "type": "string",
-        "minLength": 2
-      }
+    "summary": {
+      "type": "string",
+      "minLength": 120
     },
-    "sections": {
+    "zhSummary": {
+      "type": "string",
+      "minLength": 60
+    },
+    "bodyMarkdown": {
+      "type": "string",
+      "minLength": 4000
+    },
+    "zhBodyMarkdown": {
+      "type": "string",
+      "minLength": 2000
+    },
+    "toc": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 5,
       "items": {
         "type": "object",
-        "required": ["heading", "zhHeading", "body", "zhBody"],
+        "required": ["id", "label", "zhLabel", "level"],
         "properties": {
-          "heading": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "label": {
             "type": "string",
             "minLength": 4
           },
-          "zhHeading": {
+          "zhLabel": {
             "type": "string",
             "minLength": 2
           },
-          "body": {
+          "level": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 3
+          }
+        }
+      }
+    },
+    "faq": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["question", "answer", "zhQuestion", "zhAnswer"],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 12
+          },
+          "answer": {
             "type": "string",
             "minLength": 80
           },
-          "zhBody": {
+          "zhQuestion": {
+            "type": "string",
+            "minLength": 6
+          },
+          "zhAnswer": {
             "type": "string",
             "minLength": 40
           }
         }
       }
+    },
+    "relatedKeywords": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "redlineTerms": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "string",
+        "minLength": 2
+      }
+    },
+    "introduction": {
+      "type": "string",
+      "minLength": 120
+    },
+    "zhIntroduction": {
+      "type": "string",
+      "minLength": 60
+    },
+    "keyTakeaways": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 12
+      }
+    },
+    "zhKeyTakeaways": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 6
+      }
+    },
+    "conclusion": {
+      "type": "string",
+      "minLength": 120
+    },
+    "zhConclusion": {
+      "type": "string",
+      "minLength": 60
     }
   }
 }

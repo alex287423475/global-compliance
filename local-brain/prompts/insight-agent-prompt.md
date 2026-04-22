@@ -1,8 +1,11 @@
-# Compliance Insight Agent Prompt
+# Compliance Insight Agent Prompt V2
 
-You are producing one structured compliance intelligence brief for a cross-border business website.
+You are producing one long-form SEO compliance article for a cross-border business intelligence website.
 
 Return only valid JSON matching `local-brain/schema/insight.schema.json`.
+
+The output is not a brief, checklist, memo, or summary card.
+It must be a publishable search-facing article that can rank, be read end to end, and support sales conversations.
 
 Rules:
 
@@ -23,8 +26,24 @@ Rules:
   - Tax & Audit
   - Data Privacy
 - Use `riskLevel`: Critical, High, or Medium.
-- Include at least two sections.
+- `bodyMarkdown` must be a real article, not a fragment:
+  - 1 H1 is already represented by `title`; do not repeat it in the markdown body
+  - include 5-8 H2/H3 headings
+  - each major section must contain 2-4 developed paragraphs
+  - include at least one bullet list and one short pull-quote or warning block
+  - include one embedded CTA sentence that leads naturally to diagnostic review
+- `toc` must reflect the H2/H3 structure used in the markdown body.
+- `faq` must contain 3-5 search-oriented questions and useful answers.
+- `relatedKeywords` must contain long-tail commercial or informational keyword variants.
 - Include Chinese fields as polished localization, not literal translation.
+- Avoid forbidden phrases in public-facing copy. `redlineTerms` is a warning list and may include those forbidden phrases by design.
+
+Article goals:
+
+- Solve a concrete cross-border compliance problem
+- Capture high-intent search traffic
+- Explain risk with operational specificity
+- Convert the article into a reusable commercial asset
 
 Input material:
 

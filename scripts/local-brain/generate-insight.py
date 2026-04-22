@@ -192,6 +192,98 @@ def articleize_text(text: str) -> str:
     return cleaned
 
 
+def paragraphize(text: str, fallback_second: str = "") -> str:
+    cleaned = articleize_text(first_string(text)).strip()
+    if not cleaned:
+        cleaned = fallback_second.strip()
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", cleaned) if part.strip()]
+    if not paragraphs and cleaned:
+        paragraphs = [cleaned]
+    if len(paragraphs) == 1 and fallback_second.strip():
+        if len(paragraphs[0]) < 380:
+            paragraphs.append(fallback_second.strip())
+    return "\n\n".join(paragraphs[:2]).strip()
+
+
+def build_toc_from_markdown(markdown: str) -> List[Dict[str, Any]]:
+    toc: List[Dict[str, Any]] = []
+    for raw_line in first_string(markdown).splitlines():
+        line = raw_line.strip()
+        match = re.match(r"^(##|###)\s+(.+)$", line)
+        if not match:
+            continue
+        marks, label = match.groups()
+        toc.append(
+            {
+                "id": slugify(label),
+                "label": label.strip(),
+                "zhLabel": label.strip(),
+                "level": 2 if marks == "##" else 3,
+            }
+        )
+    return toc
+
+
+def section_markdown(heading: str, body: str) -> str:
+    return "## %s\n\n%s" % (heading.strip(), body.strip())
+
+
+def build_markdown_article(
+    article: Dict[str, Any],
+    state: WorkflowState,
+    locale: str = "en",
+) -> str:
+    title = first_string(article.get("title" if locale == "en" else "zhTitle"))
+    dek = first_string(article.get("dek" if locale == "en" else "zhDek"))
+    introduction = first_string(article.get("introduction" if locale == "en" else "zhIntroduction"))
+    conclusion = first_string(article.get("conclusion" if locale == "en" else "zhConclusion"))
+    takeaways = article.get("keyTakeaways" if locale == "en" else "zhKeyTakeaways", [])
+    if not isinstance(takeaways, list):
+        takeaways = []
+    sections = article.get("sections", [])
+    if not isinstance(sections, list):
+        sections = []
+    faq = article.get("faq", [])
+    if not isinstance(faq, list):
+        faq = []
+
+    parts: List[str] = []
+    if dek:
+        parts.append("> %s" % dek)
+    if introduction:
+        parts.append(introduction.strip())
+    if takeaways:
+        parts.append("## Key Takeaways\n\n" + "\n".join("- %s" % first_string(item) for item in takeaways[:5] if first_string(item)))
+    for section in sections:
+        heading = first_string(section.get("heading" if locale == "en" else "zhHeading"))
+        body = first_string(section.get("body" if locale == "en" else "zhBody"))
+        if heading and body:
+            parts.append(section_markdown(heading, body))
+    if faq:
+        faq_parts = ["## FAQ"]
+        for item in faq[:5]:
+            question = first_string(item.get("question" if locale == "en" else "zhQuestion"))
+            answer = first_string(item.get("answer" if locale == "en" else "zhAnswer"))
+            if question and answer:
+                faq_parts.append("### %s\n\n%s" % (question, answer))
+        parts.append("\n\n".join(faq_parts))
+    if conclusion:
+        parts.append("## Conclusion\n\n%s" % conclusion.strip())
+
+    markdown = "\n\n".join(part.strip() for part in parts if part.strip())
+    warning_terms = article.get("redlineTerms", [])
+    if isinstance(warning_terms, list) and warning_terms:
+        warning_block = "\n".join("- %s" % first_string(term) for term in warning_terms[:6] if first_string(term))
+        if warning_block:
+            markdown += "\n\n## Redline Watchlist\n\n" + warning_block
+    if locale == "en":
+        cta = "If your team needs this risk mapped against its own checkout, policy stack, or evidence files, request a private diagnostic review before scaling traffic."
+    else:
+        cta = "If your team needs this risk mapped against its own materials, request a private diagnostic review before scaling traffic."
+    markdown += "\n\n> %s" % cta
+    return markdown.strip()
+
+
 def sanitize_article_claims(value: Any) -> Any:
     if isinstance(value, str):
         return sanitize_claim_text(value)
@@ -222,28 +314,49 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     profile = state.get("profile", {})
     seed = state.get("seed", "compliance asset")
 
-    normalized["slug"] = slugify(first_string(normalized.get("slug")) or seed + " compliance guide")
+    normalized["slug"] = slugify(first_string(normalized.get("slug")) or seed + " compliance article")
     normalized["title"] = articleize_text(
-        first_string(normalized.get("title"), "%s compliance guide for cross-border sellers" % title_case_seed(seed))
+        first_string(normalized.get("title"), "%s cross-border compliance article" % title_case_seed(seed))
     )
-    normalized["zhTitle"] = first_string(normalized.get("zhTitle"), "%s跨境合规指南" % seed)
+    normalized["zhTitle"] = first_string(normalized.get("zhTitle"), normalized["title"])
+    normalized["category"] = first_string(normalized.get("category"), profile.get("category", "Payment Risk"))
+    if normalized["category"] not in ALLOWED_CATEGORIES:
+        normalized["category"] = profile.get("category", "Payment Risk")
+    normalized["market"] = first_string(normalized.get("market"), profile.get("market", "North America"))
+    normalized["riskLevel"] = first_string(normalized.get("riskLevel"), profile.get("risk_level", "High"))
+    if normalized["riskLevel"] not in ALLOWED_RISK_LEVELS:
+        normalized["riskLevel"] = profile.get("risk_level", "High")
+    normalized["updatedAt"] = dt.date.today().isoformat()
+
+    normalized["metaTitle"] = first_string(normalized.get("metaTitle"), normalized["title"])[:80]
+    normalized["metaDescription"] = articleize_text(
+        first_string(
+            normalized.get("metaDescription"),
+            "Operational guidance for cross-border teams that need safer claims, clearer policy language, and stronger evidence files before payment review, disputes, or platform scrutiny.",
+        )
+    )[:180]
     normalized["summary"] = articleize_text(
         first_string(
             normalized.get("summary"),
             "A publishable compliance analysis for teams preparing SEO wording, policy pages, evidence files, and review-ready explanations.",
         )
     )
-    normalized["zhSummary"] = first_string(
-        normalized.get("zhSummary"), "面向网站情报库发布的合规分析文章，用于梳理风险边界、安全表达和证据准备。"
+    normalized["zhSummary"] = first_string(normalized.get("zhSummary"), normalized["summary"])
+    normalized["dek"] = articleize_text(
+        first_string(
+            normalized.get("dek"),
+            "What cross-border sellers need to fix in product language, policy pages, and support records before this category attracts avoidable scrutiny.",
+        )
     )
-    normalized["market"] = first_string(normalized.get("market"), profile.get("market", "North America"))
-    normalized["updatedAt"] = dt.date.today().isoformat()
-
-    category = first_string(normalized.get("category"), profile.get("category", "Payment Risk"))
-    normalized["category"] = category if category in ALLOWED_CATEGORIES else profile.get("category", "Payment Risk")
-
-    risk_level = first_string(normalized.get("riskLevel"), profile.get("risk_level", "High"))
-    normalized["riskLevel"] = risk_level if risk_level in ALLOWED_RISK_LEVELS else profile.get("risk_level", "High")
+    normalized["zhDek"] = first_string(normalized.get("zhDek"), normalized["dek"])
+    normalized["introduction"] = paragraphize(
+        first_string(
+            normalized.get("introduction"),
+            "Most compliance problems in this category do not start with a single forbidden phrase. They build up when product copy, payment language, refund expectations, and support records describe different realities.\n\nA useful article should help an operator see where scrutiny begins, which public-facing claims create friction, and which documents need to exist before a dispute, payment review, or platform check arrives.",
+        ),
+        "Instead of treating compliance as a final proofreading step, the better approach is to use the article itself as an operating map: what language belongs on the page, what claims must stay internal, and what evidence needs to exist before sales volume increases.",
+    )
+    normalized["zhIntroduction"] = first_string(normalized.get("zhIntroduction"), normalized["introduction"])
 
     state_redlines = [first_string(item) for item in state.get("redline_terms", []) if first_string(item)]
     redlines = normalized.get("redlineTerms", [])
@@ -252,8 +365,35 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     normalized["redlineTerms"] = [first_string(item) for item in redlines if first_string(item)]
     if state_redlines:
         normalized["redlineTerms"] = list(dict.fromkeys(state_redlines[:8] + normalized["redlineTerms"]))[:8]
-    elif len(normalized["redlineTerms"]) < 2:
-        normalized["redlineTerms"] = normalized["redlineTerms"][:4]
+    if len(normalized["redlineTerms"]) < 4:
+        normalized["redlineTerms"] = list(
+            dict.fromkeys(
+                normalized["redlineTerms"]
+                + [
+                    "guaranteed approval",
+                    "risk-free return",
+                    "anonymous payment",
+                    "medical grade",
+                ]
+            )
+        )[:8]
+
+    takeaways = normalized.get("keyTakeaways", [])
+    if not isinstance(takeaways, list):
+        takeaways = []
+    normalized["keyTakeaways"] = [articleize_text(first_string(item)) for item in takeaways if first_string(item)]
+    if len(normalized["keyTakeaways"]) < 3:
+        normalized["keyTakeaways"] = [
+            "Public-facing copy should describe operations and limits, not guaranteed outcomes.",
+            "Policy pages need to match actual refund handling, evidence requests, and support windows.",
+            "A category becomes easier to defend when screenshots, logs, and order records already exist before review starts.",
+        ]
+    zh_takeaways = normalized.get("zhKeyTakeaways", [])
+    if not isinstance(zh_takeaways, list):
+        zh_takeaways = []
+    normalized["zhKeyTakeaways"] = [first_string(item) for item in zh_takeaways if first_string(item)]
+    if len(normalized["zhKeyTakeaways"]) < 3:
+        normalized["zhKeyTakeaways"] = list(normalized["keyTakeaways"])
 
     sections = normalized.get("sections", [])
     if not isinstance(sections, list):
@@ -262,23 +402,119 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     for section in sections:
         if not isinstance(section, dict):
             continue
+        heading = articleize_text(first_string(section.get("heading"), "What compliant operating language looks like"))
+        body = paragraphize(
+            first_string(
+                section.get("body"),
+                "Keep claims tied to observable operations, policies, support records, and fulfillment evidence.",
+            ),
+            "When a section cannot name the operational boundary, the proof source, and the customer-facing implication, it still reads like an internal note rather than a publishable article.",
+        )
         cleaned_sections.append(
             {
-                "heading": articleize_text(first_string(section.get("heading"), "What compliant operating language looks like")),
-                "zhHeading": first_string(section.get("zhHeading"), "证据边界内的运营表达"),
-                "body": articleize_text(
-                    first_string(
-                        section.get("body"),
-                        "Keep claims tied to observable operations, policies, support records, and fulfillment evidence.",
-                    )
-                ),
-                "zhBody": first_string(section.get("zhBody"), "将表达限制在可观察的运营事实、政策、客服记录和履约证据内。"),
+                "heading": heading,
+                "zhHeading": first_string(section.get("zhHeading"), heading),
+                "body": body,
+                "zhBody": first_string(section.get("zhBody"), body),
             }
         )
-    if len(cleaned_sections) < 3:
+    if len(cleaned_sections) < 4:
         fallback = build_fallback_article(state, seed, state.get("revision_count", 0))
         cleaned_sections = fallback["sections"]
     normalized["sections"] = cleaned_sections
+
+    normalized["conclusion"] = paragraphize(
+        first_string(
+            normalized.get("conclusion"),
+            "For cross-border sellers, the goal is not to sound more aggressive than the market. The goal is to make every public claim easy to explain, easy to evidence, and easy to defend when a payment team, marketplace reviewer, or customer dispute asks for proof.\n\nOnce product copy, policy language, and support records describe the same operating reality, this category becomes far easier to sell without inviting unnecessary compliance friction.",
+        ),
+        "That is the standard a publishable insight article should meet: not louder language, but tighter alignment between what the market reads, what support can prove, and what the business is actually prepared to deliver.",
+    )
+    normalized["zhConclusion"] = first_string(normalized.get("zhConclusion"), normalized["conclusion"])
+
+    related_keywords = normalized.get("relatedKeywords", [])
+    if not isinstance(related_keywords, list):
+        related_keywords = []
+    normalized["relatedKeywords"] = [first_string(item) for item in related_keywords if first_string(item)]
+    if len(normalized["relatedKeywords"]) < 6:
+        normalized["relatedKeywords"] = list(
+            dict.fromkeys(
+                normalized["relatedKeywords"]
+                + [seed, normalized["category"], normalized["market"]]
+                + state.get("safe_terms", [])[:6]
+            )
+        )[:8]
+
+    faq = normalized.get("faq", [])
+    if not isinstance(faq, list):
+        faq = []
+    cleaned_faq = []
+    for item in faq:
+        if not isinstance(item, dict):
+            continue
+        question = first_string(item.get("question"))
+        answer = paragraphize(first_string(item.get("answer")))
+        if question and answer:
+            cleaned_faq.append(
+                {
+                    "question": question,
+                    "answer": answer,
+                    "zhQuestion": first_string(item.get("zhQuestion"), question),
+                    "zhAnswer": first_string(item.get("zhAnswer"), answer),
+                }
+            )
+    if len(cleaned_faq) < 3:
+        cleaned_faq = [
+            {
+                "question": "What usually triggers extra scrutiny in this category?",
+                "answer": "Scrutiny usually builds when product claims, policy wording, and support messages describe different realities. The risk is not a single phrase by itself, but the pattern of promises the business cannot fully evidence once a payment review, platform escalation, or customer dispute arrives.",
+                "zhQuestion": "What usually triggers extra scrutiny in this category?",
+                "zhAnswer": "Scrutiny usually builds when product claims, policy wording, and support messages describe different realities. The risk is not a single phrase by itself, but the pattern of promises the business cannot fully evidence once a payment review, platform escalation, or customer dispute arrives.",
+            },
+            {
+                "question": "What should a compliant article help the operator prepare?",
+                "answer": "It should help the operator align SEO copy, policy pages, refund handling language, support windows, and evidence files. A useful article is not only readable; it also maps directly to the records and workflows the team will rely on during review.",
+                "zhQuestion": "What should a compliant article help the operator prepare?",
+                "zhAnswer": "It should help the operator align SEO copy, policy pages, refund handling language, support windows, and evidence files. A useful article is not only readable; it also maps directly to the records and workflows the team will rely on during review.",
+            },
+            {
+                "question": "Why is evidence preparation part of SEO content quality here?",
+                "answer": "Because the page will eventually be tested by reality. If the article implies a cleaner process or a broader claim than the business can prove, the content may attract traffic but it also raises dispute and review risk. Evidence keeps the article commercially usable.",
+                "zhQuestion": "Why is evidence preparation part of SEO content quality here?",
+                "zhAnswer": "Because the page will eventually be tested by reality. If the article implies a cleaner process or a broader claim than the business can prove, the content may attract traffic but it also raises dispute and review risk. Evidence keeps the article commercially usable.",
+            },
+        ]
+    normalized["faq"] = cleaned_faq
+
+    normalized["bodyMarkdown"] = first_string(normalized.get("bodyMarkdown"))
+    if not normalized["bodyMarkdown"]:
+        normalized["bodyMarkdown"] = build_markdown_article(normalized, state, "en")
+    normalized["zhBodyMarkdown"] = first_string(normalized.get("zhBodyMarkdown"))
+    if not normalized["zhBodyMarkdown"]:
+        normalized["zhBodyMarkdown"] = build_markdown_article(normalized, state, "zh")
+
+    toc = normalized.get("toc", [])
+    if not isinstance(toc, list):
+        toc = []
+    normalized["toc"] = []
+    for item in toc:
+        if not isinstance(item, dict):
+            continue
+        label = first_string(item.get("label"))
+        if not label:
+            continue
+        normalized["toc"].append(
+            {
+                "id": slugify(first_string(item.get("id"), label)),
+                "label": label,
+                "zhLabel": first_string(item.get("zhLabel"), label),
+                "level": 3 if item.get("level") == 3 else 2,
+            }
+        )
+    if len(normalized["toc"]) < 5:
+        normalized["toc"] = build_toc_from_markdown(normalized["bodyMarkdown"])
+        if len(normalized["toc"]) < 5:
+            normalized["toc"] = build_toc_from_markdown(build_markdown_article(normalized, state, "en"))
 
     return sanitize_article_claims(normalized)
 
@@ -394,7 +630,7 @@ class OpenAICompatibleClient:
             except urllib.error.HTTPError as exc:
                 body = exc.read().decode("utf-8", errors="replace")
                 raise PipelineError("LLM request failed: HTTP %s %s" % (exc.code, body[:800]))
-            except (TimeoutError, socket.timeout, ssl.SSLError, urllib.error.URLError) as exc:
+            except (TimeoutError, socket.timeout, ssl.SSLError, urllib.error.URLError, ConnectionResetError, OSError) as exc:
                 reason = getattr(exc, "reason", exc)
                 transient_errors.append(str(reason))
                 if attempt >= 3:
@@ -577,46 +813,160 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
     market = profile.get("market", "North America")
     seed_title = title_case_seed(safe_seed)
     slug = slugify(safe_seed + " compliance guide")
-    evidence_text = ", ".join(state.get("evidence", [])[:5])
-    safe_terms_text = ", ".join(state.get("safe_terms", [])[:6])
+    evidence_items = state.get("evidence", [])[:5]
+    evidence_text = ", ".join(evidence_items) if evidence_items else "policy screenshots, support logs, fulfillment records, and order tracking evidence"
+    safe_terms = state.get("safe_terms", [])[:6]
+    safe_terms_text = ", ".join(safe_terms) if safe_terms else "documented specifications, operational limits, support process, and evidence-backed language"
     rewrite_note = " after reviewer revision" if revision_count > 0 else ""
     return {
         "slug": slug,
-        "title": "%s compliance guide for cross-border sellers%s" % (seed_title, rewrite_note),
-        "zhTitle": "%s跨境合规指南" % safe_seed,
+        "title": "What cross-border sellers should fix before scaling %s%s" % (seed_title, rewrite_note),
+        "zhTitle": "%s compliance article" % safe_seed,
         "category": profile.get("category", "Payment Risk"),
         "market": market,
         "riskLevel": profile.get("risk_level", "High"),
         "updatedAt": dt.date.today().isoformat(),
-        "summary": "A publishable compliance article for teams selling %s into %s, focused on safer SEO wording, policy-page language, customer-facing claims, and the evidence files needed before disputes or platform review." % (seed_title, market),
-        "zhSummary": "面向%s场景的可发布合规文章，重点梳理更安全的 SEO 表达、政策页面语言、客户可见说法，以及在争议或平台审核前应准备的证据文件。" % safe_seed,
+        "metaTitle": "What cross-border sellers should fix before scaling %s" % seed_title,
+        "metaDescription": "A long-form compliance article on safer claims, policy wording, support boundaries, and evidence files for %s sellers in %s." % (seed_title, market),
+        "dek": "A publishable intelligence article on the claims, policy wording, support boundaries, and evidence files that matter before this category attracts avoidable review.",
+        "zhDek": "An article introduction for %s covering product claims, policy wording, and evidence preparation." % safe_seed,
+        "summary": "A publishable compliance article for teams selling %s into %s. It explains how to write readable public copy, align policy pages with real operations, and prepare the evidence package needed before disputes, payment review, or platform checks arrive." % (seed_title, market),
+        "zhSummary": "A publishable long-form article for %s that explains how page copy, policy pages, support language, and evidence files should stay aligned." % safe_seed,
+        "introduction": (
+            "Many operators treat category compliance as a last-minute editing problem. In practice, review pressure builds much earlier: "
+            "the article headline promises too much, the policy page suggests a cleaner process than the team can prove, and support "
+            "messages quietly introduce a third version of the truth.\n\n"
+            "A real publishable article should do more than list red flags. It should explain where scrutiny starts, how demand-capture "
+            "language can stay commercially useful without drifting into prohibited claims, and what documents must already exist before "
+            "the first dispute lands."
+        ),
+        "zhIntroduction": (
+            "This article should open by explaining how scrutiny begins: not with one phrase alone, but when page claims, policy wording, "
+            "and support language describe different realities.\n\n"
+            "It should then explain which commercially useful expressions can stay public, which phrases must stay internal, and what "
+            "documents need to exist before the first dispute or review arrives."
+        ),
+        "keyTakeaways": [
+            "Use the article to clarify operating boundaries, not just to replace a few risky adjectives.",
+            "Align product copy, FAQ answers, refund policy, and support responses so they describe the same reality.",
+            "Keep redline phrases in an internal warning list and keep public-facing copy tied to verifiable operations.",
+            "Build the evidence package before scale so the article can support SEO, customer service, and review defense at the same time.",
+        ],
+        "zhKeyTakeaways": [
+            "Use the article to define operating boundaries instead of just swapping risky adjectives.",
+            "Product copy, FAQ answers, refund policy, and support responses should describe the same reality.",
+            "Keep redline phrases inside an internal warning list and keep public copy tied to verifiable operations.",
+            "Prepare evidence before scale so the article can support SEO, support handling, and review defense together.",
+        ],
         "redlineTerms": state.get("redline_terms", [])[:8],
+        "relatedKeywords": list(dict.fromkeys([safe_seed, seed_title, market] + safe_terms + evidence_items))[:8],
         "sections": [
             {
-                "heading": "Why %s draws closer review from payment teams and platforms" % seed_title,
-                "zhHeading": "为什么%s更容易被支付团队和平台重点审查" % safe_seed,
-                "body": "For %s, the real risk rarely starts with one forbidden word alone. Review pressure usually comes from the combination of product claims, refund expectations, delivery promises, and how clearly the seller explains operational limits. A publishable article should help readers understand where scrutiny begins and which public-facing statements make an account look harder to trust." % seed_title,
-                "zhBody": "针对%s，真正的风险通常不是某一个禁词单独触发的，而是产品说法、退款预期、交付承诺和运营边界说明叠加后的结果。可发布的文章应先帮助读者理解：审查通常从哪里开始，哪些对外表达会让账户看起来更不值得信任。" % safe_seed,
+                "heading": "Why %s starts drawing review before the seller notices" % seed_title,
+                "zhHeading": "Why %s enters review before the seller notices" % safe_seed,
+                "body": (
+                    "For %s, the real risk rarely starts with one forbidden word alone. Review pressure usually comes from the combination "
+                    "of product claims, refund expectations, delivery promises, and how clearly the seller explains operational limits. "
+                    "A publishable article should show that scrutiny begins when these layers contradict each other, not only when a single "
+                    "phrase looks aggressive.\n\n"
+                    "That is why article structure matters. The headline should frame the business problem, the introduction should explain "
+                    "the review context, and the body should move from claim risk to policy risk to evidence risk. If the copy reads like "
+                    "a memo, it stays internal. If it reads like an article with a clear argument, it becomes useful on-site intelligence."
+                ) % seed_title,
+                "zhBody": (
+                    "This section should explain why review pressure starts early: product promises, refund expectations, delivery language, "
+                    "and operational boundaries begin to conflict.\n\n"
+                    "It should also explain why article structure matters. A real article frames the business problem, explains the review "
+                    "context, and then develops the argument through claims, policy language, and evidence."
+                ),
             },
             {
-                "heading": "Which claims should stay out of titles, listings, and policy pages",
-                "zhHeading": "哪些说法不该出现在标题、Listing 和政策页面里",
-                "body": "High-intent keywords still matter, but they must not force the page into prohibited or unverifiable claims. Build content around safer demand-capture phrases such as %s. Keep the truly sensitive wording in an internal redline list instead of surfacing it in titles, checkout copy, return policies, or ad language." % safe_terms_text,
-                "zhBody": "高意向关键词仍然重要，但不能把页面推向禁止性或不可验证的承诺。内容应围绕更安全的需求捕获表达来写，例如：%s。真正敏感的说法应该留在内部红线清单中，而不是出现在标题、结账文案、退款政策或广告话术里。" % safe_terms_text,
+                "heading": "Which claims should stay out of the article, not just out of the ad copy",
+                "zhHeading": "Which claims should stay out of the article, not just out of ads",
+                "body": (
+                    "High-intent keywords still matter, but they must not force the page into prohibited or unverifiable claims. Build article "
+                    "sections around safer demand-capture phrases such as %s, then explain what each phrase can and cannot imply in public-facing "
+                    "copy.\n\n"
+                    "The important distinction is editorial. A good article can name the redline problem, explain why it is risky, and then pivot "
+                    "into safer wording without sounding evasive. Keep the truly sensitive wording in an internal warning list instead of surfacing "
+                    "it in titles, checkout copy, return policies, or ad language."
+                ) % safe_terms_text,
+                "zhBody": (
+                    "This section should show that commercial intent and compliant language can coexist when the article is built around safer "
+                    "phrases and clear boundaries.\n\n"
+                    "It should explain that the article may discuss redline problems, but it should not repeat those phrases as if they belong in "
+                    "titles, policy pages, or checkout copy."
+                ),
             },
             {
-                "heading": "What a safer content and support stack looks like in practice",
-                "zhHeading": "更安全的内容与客服栈在实操中应该是什么样子",
-                "body": "A stronger page does not just rewrite adjectives. It aligns product copy, FAQ answers, refund language, fulfillment notes, and support replies so they all describe the same operating reality. Readers should leave with a clear picture of what the product does, what it does not do, how support responds, and which promises the seller is willing to stand behind in writing.",
-                "zhBody": "更稳妥的页面不只是替换几个形容词，而是让产品文案、FAQ 回答、退款语言、履约说明和客服回复都描述同一套运营现实。读者看完后，应能清楚理解产品能做什么、不能做什么、客服怎样回应，以及卖家愿意以书面形式承担哪些承诺。",
+                "heading": "What a readable article reveals about the real support stack",
+                "zhHeading": "What a readable article reveals about the real support stack",
+                "body": (
+                    "A stronger page does not just rewrite adjectives. It aligns product copy, FAQ answers, refund language, fulfillment notes, "
+                    "and support replies so they all describe the same operating reality. The article becomes persuasive when readers leave with "
+                    "a clear picture of what the product does, what it does not do, how support responds, and which promises the seller is willing "
+                    "to stand behind in writing.\n\n"
+                    "This is also where many generated drafts fail. They sound polished, but they do not translate into customer-service behavior. "
+                    "A publishable article has to bridge that gap by showing what the operator will actually document, how evidence will be collected, "
+                    "and where the support boundary sits when a claim is challenged."
+                ),
+                "zhBody": (
+                    "This section should translate polished wording into real support behavior: what the product does, what it does not do, how the "
+                    "team responds, and which promises the business is willing to stand behind.\n\n"
+                    "That is the difference between a decorative AI draft and an article that can actually support operations."
+                ),
             },
             {
-                "heading": "Which evidence files should be ready before disputes or review",
-                "zhHeading": "在争议或审核发生前，哪些证据文件应该先准备好",
-                "body": "The asset only becomes operationally useful when it is backed by documents. For this category, the minimum evidence set should include %s. Once those files exist, the article can support SEO work, payment review, customer-service handling, and internal training without drifting into unsupported claims." % evidence_text,
-                "zhBody": "只有背后配套好文件，这份资产才真正具备运营价值。对这个类目而言，最低证据集应包括：%s。一旦这些文件准备齐全，这篇文章才能同时服务 SEO、支付审核、客服处理和内部培训，而不会滑向无证据支撑的承诺。",
+                "heading": "Which evidence files turn the article into an operating asset",
+                "zhHeading": "Which evidence files turn the article into an operating asset",
+                "body": (
+                    "The article only becomes operationally useful when it is backed by documents. For this category, the minimum evidence set should "
+                    "include %s. Without that layer, even well-written copy remains a content exercise rather than a defensible commercial asset.\n\n"
+                    "Once those files exist, the article can support SEO work, payment review, customer-service handling, and internal training at the "
+                    "same time. That is the standard worth aiming for: not a decorative article, but one that still makes sense when a dispute, review, "
+                    "or audit asks for proof."
+                ) % evidence_text,
+                "zhBody": (
+                    "This section should identify the evidence package that makes the article operationally useful instead of merely readable.\n\n"
+                    "Once those files exist, the same article can support SEO, support handling, payment review, and internal training without losing coherence."
+                ),
             },
         ],
+        "conclusion": (
+            "A real article in this library should leave the reader with a practical standard: every public claim should map to an operating fact, "
+            "every policy promise should map to a support process, and every sensitive category should map to an evidence file. That is how a compliance "
+            "article becomes commercially useful.\n\n"
+            "For teams scaling cross-border traffic, the goal is not simply to sound safer. The goal is to publish a piece that can survive contact with "
+            "buyers, support tickets, payment reviewers, and internal training without collapsing into contradiction."
+        ),
+        "zhConclusion": (
+            "The conclusion should leave the reader with one standard: every public claim maps to an operating fact, every policy promise maps to a "
+            "support process, and every sensitive category maps to an evidence file.\n\n"
+            "That is what turns an article from a thin briefing note into an asset that still holds up when buyers, payment teams, or internal reviewers ask for proof."
+        ),
+        "faq": [
+            {
+                "question": "What usually triggers extra scrutiny in this category?",
+                "answer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
+                "zhQuestion": "What usually triggers extra scrutiny in this category?",
+                "zhAnswer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
+            },
+            {
+                "question": "How should the article handle high-intent commercial keywords?",
+                "answer": "It should keep commercial relevance while tightening the implied promise. The article can discuss what buyers search for, but it should reframe those terms through operational wording, documented limits, and evidence-backed explanations.",
+                "zhQuestion": "How should the article handle high-intent commercial keywords?",
+                "zhAnswer": "It should keep commercial relevance while tightening the implied promise. The article can discuss what buyers search for, but it should reframe those terms through operational wording, documented limits, and evidence-backed explanations.",
+            },
+            {
+                "question": "What evidence should exist before traffic scales?",
+                "answer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
+                "zhQuestion": "What evidence should exist before traffic scales?",
+                "zhAnswer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
+            },
+        ],
+        "bodyMarkdown": "",
+        "zhBodyMarkdown": "",
+        "toc": [],
     }
 
 
@@ -651,14 +1001,29 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
                 "market": "target market",
                 "riskLevel": list(ALLOWED_RISK_LEVELS),
                 "updatedAt": "YYYY-MM-DD",
+                "metaTitle": "SEO title under 80 chars",
+                "metaDescription": "SEO meta description under 180 chars",
+                "dek": "English deck under headline",
+                "zhDek": "Chinese deck under headline",
                 "summary": "English summary",
                 "zhSummary": "Chinese summary",
+                "introduction": "Two-paragraph English introduction",
+                "zhIntroduction": "Two-paragraph Chinese introduction",
+                "keyTakeaways": ["3-5 English bullets"],
+                "zhKeyTakeaways": ["3-5 Chinese bullets"],
+                "bodyMarkdown": "Long-form markdown article with 5-8 H2/H3 headings, at least 900 English words, lists, and embedded CTA",
+                "zhBodyMarkdown": "Localized markdown article",
+                "toc": [{"id": "heading-id", "label": "English heading", "zhLabel": "Chinese heading", "level": 2}],
+                "faq": [{"question": "", "answer": "", "zhQuestion": "", "zhAnswer": ""}],
+                "relatedKeywords": ["keyword variants"],
                 "redlineTerms": ["terms"],
                 "sections": [{"heading": "", "zhHeading": "", "body": "", "zhBody": ""}],
+                "conclusion": "Two-paragraph English conclusion",
+                "zhConclusion": "Two-paragraph Chinese conclusion",
             },
         }
         article = llm.chat_json(
-            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, or checklist. Write a polished article in a restrained, authoritative consulting tone. The title, summary, and section headings must read like article copy a buyer would read on a website. redlineTerms must list the forbidden phrases that should stay out of public-facing copy; do not rewrite those warning phrases into euphemisms. Avoid every red line term exactly and semantically in the summary and section bodies. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
+            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. The output must read like a real website article a buyer would read end to end: headline, SEO metadata, deck, introduction, key takeaways, 5-8 developed H2/H3 sections, FAQ, and conclusion. bodyMarkdown is the primary article body and must be a real long-form markdown article, not section fragments pasted together. Each major section should have 2-4 developed paragraphs. Include one bullet list, one short warning or quote block, and one embedded CTA sentence about diagnostic review. redlineTerms must list forbidden phrases that should stay out of public-facing copy; do not rewrite those warning phrases into euphemisms. Avoid every red line term exactly and semantically in the title, meta description, deck, summary, introduction, markdown body, FAQ answers, and conclusion. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
             json.dumps(payload, ensure_ascii=False),
             temperature=0.35,
         )
@@ -683,9 +1048,30 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
 
 
 def publishable_text(article: Dict[str, Any]) -> str:
-    parts = [article.get("title", ""), article.get("summary", ""), article.get("zhTitle", ""), article.get("zhSummary", "")]
+    parts = [
+        article.get("title", ""),
+        article.get("metaTitle", ""),
+        article.get("metaDescription", ""),
+        article.get("dek", ""),
+        article.get("summary", ""),
+        article.get("introduction", ""),
+        article.get("bodyMarkdown", ""),
+        article.get("conclusion", ""),
+        article.get("zhTitle", ""),
+        article.get("zhDek", ""),
+        article.get("zhSummary", ""),
+        article.get("zhIntroduction", ""),
+        article.get("zhBodyMarkdown", ""),
+        article.get("zhConclusion", ""),
+    ]
+    parts.extend(article.get("keyTakeaways", []))
+    parts.extend(article.get("zhKeyTakeaways", []))
+    parts.extend(article.get("relatedKeywords", []))
     for section in article.get("sections", []):
         parts.extend([section.get("heading", ""), section.get("zhHeading", ""), section.get("body", ""), section.get("zhBody", "")])
+    for item in article.get("faq", []):
+        if isinstance(item, dict):
+            parts.extend([item.get("question", ""), item.get("answer", ""), item.get("zhQuestion", ""), item.get("zhAnswer", "")])
     return "\n".join(parts)
 
 
@@ -698,8 +1084,34 @@ def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
     ).lower()
     if any(term in article_voice_text for term in ["architecture", "architectures", "framework", "frameworks", "checklist", "checklists", "brief", "briefs"]):
         findings.append("internal-document wording in article copy")
-    if len(article.get("sections", [])) < 2:
+    if not article.get("dek"):
+        findings.append("missing deck")
+    if not article.get("introduction"):
+        findings.append("missing introduction")
+    if len(article.get("keyTakeaways", [])) < 3:
+        findings.append("missing key takeaways")
+    if not article.get("conclusion"):
+        findings.append("missing conclusion")
+    if not article.get("bodyMarkdown"):
+        findings.append("missing body markdown")
+    if not article.get("faq") or len(article.get("faq", [])) < 3:
+        findings.append("missing faq")
+    if not article.get("toc") or len(article.get("toc", [])) < 5:
+        findings.append("missing toc")
+    if len(article.get("sections", [])) < 4:
         findings.append("too few sections")
+    if len(article.get("bodyMarkdown", "")) < 4000:
+        findings.append("markdown article too short")
+    if len(publishable_text(article)) < 6000:
+        findings.append("article is too thin")
+    for idx, section in enumerate(article.get("sections", []), start=1):
+        if len(first_string(section.get("body"))) < 280:
+            findings.append("section %s body too short" % idx)
+        if "\n\n" not in first_string(section.get("body")):
+            findings.append("section %s lacks developed paragraphs" % idx)
+    markdown_headings = re.findall(r"^##+\s+.+$", first_string(article.get("bodyMarkdown")), flags=re.MULTILINE)
+    if len(markdown_headings) < 5:
+        findings.append("not enough markdown headings")
     if any(term in publishable_text(article).lower() for term in ["best ever", "miracle", "easy money", "100 percent"]):
         findings.append("overpromising marketing tone")
     feedback = "Remove forbidden or overpromising language and rewrite with evidence-bounded claims: %s" % ", ".join(findings)
@@ -773,7 +1185,34 @@ def route_after_review(state: WorkflowState) -> str:
 
 def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[str, Any]:
     errors = []
-    required = ["slug", "title", "zhTitle", "category", "market", "riskLevel", "updatedAt", "summary", "zhSummary", "redlineTerms", "sections"]
+    required = [
+        "slug",
+        "title",
+        "zhTitle",
+        "category",
+        "market",
+        "riskLevel",
+        "updatedAt",
+        "metaTitle",
+        "metaDescription",
+        "dek",
+        "zhDek",
+        "summary",
+        "zhSummary",
+        "introduction",
+        "zhIntroduction",
+        "keyTakeaways",
+        "zhKeyTakeaways",
+        "bodyMarkdown",
+        "zhBodyMarkdown",
+        "toc",
+        "faq",
+        "relatedKeywords",
+        "redlineTerms",
+        "sections",
+        "conclusion",
+        "zhConclusion",
+    ]
     for field in required:
         if field not in article or article[field] in (None, ""):
             errors.append("missing required field: %s" % field)
@@ -785,15 +1224,43 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
         errors.append("riskLevel must be Critical, High, or Medium")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", article.get("updatedAt", "")):
         errors.append("updatedAt must use YYYY-MM-DD")
-    if not isinstance(article.get("redlineTerms"), list) or len(article.get("redlineTerms", [])) < 2:
-        errors.append("redlineTerms must contain at least two terms")
+    if not isinstance(article.get("redlineTerms"), list) or len(article.get("redlineTerms", [])) < 4:
+        errors.append("redlineTerms must contain at least four terms")
+    if not isinstance(article.get("keyTakeaways"), list) or len(article.get("keyTakeaways", [])) < 3:
+        errors.append("keyTakeaways must contain at least three bullets")
+    if not isinstance(article.get("zhKeyTakeaways"), list) or len(article.get("zhKeyTakeaways", [])) < 3:
+        errors.append("zhKeyTakeaways must contain at least three bullets")
+    if not isinstance(article.get("relatedKeywords"), list) or len(article.get("relatedKeywords", [])) < 6:
+        errors.append("relatedKeywords must contain at least six keyword variants")
+    if not isinstance(article.get("faq"), list) or len(article.get("faq", [])) < 3:
+        errors.append("faq must contain at least three entries")
+    else:
+        for index, item in enumerate(article.get("faq", [])):
+            for field in ["question", "answer", "zhQuestion", "zhAnswer"]:
+                if not first_string(item.get(field)):
+                    errors.append("faq[%d] missing field: %s" % (index, field))
+    if not isinstance(article.get("toc"), list) or len(article.get("toc", [])) < 5:
+        errors.append("toc must contain at least five entries")
+    if len(first_string(article.get("bodyMarkdown"))) < 4000:
+        errors.append("bodyMarkdown is too short for a publishable article")
+    if len(first_string(article.get("zhBodyMarkdown"))) < 2000:
+        errors.append("zhBodyMarkdown is too short for a localized article")
     sections = article.get("sections", [])
-    if not isinstance(sections, list) or len(sections) < 2:
-        errors.append("sections must contain at least two sections")
+    if not isinstance(sections, list) or len(sections) < 4:
+        errors.append("sections must contain at least four sections")
     for index, section in enumerate(sections):
         for field in ["heading", "zhHeading", "body", "zhBody"]:
             if not section.get(field):
                 errors.append("sections[%d] missing field: %s" % (index, field))
+        if len(first_string(section.get("body"))) < 280:
+            errors.append("sections[%d].body is too short for a publishable article" % index)
+        if "\n\n" not in first_string(section.get("body")):
+            errors.append("sections[%d].body should contain at least two paragraphs" % index)
+    markdown_headings = re.findall(r"^##+\s+.+$", first_string(article.get("bodyMarkdown")), flags=re.MULTILINE)
+    if len(markdown_headings) < 5:
+        errors.append("bodyMarkdown should contain at least five H2/H3 headings")
+    if len(publishable_text(article)) < 6000:
+        errors.append("article is too thin for publication")
     hits = contains_any(publishable_text(article), strict_terms)
     if hits:
         errors.append("Fail-Safe blocked forbidden claim(s) in publishable text: %s" % ", ".join(hits))

@@ -16,5 +16,7 @@ local-brain/tmp-audits/
 local-brain/tmp/
 __pycache__/
 .venv-local-brain/
+local-brain/drafts/
 local-brain/audits/
 local-brain/config.json
+tsconfig.tsbuildinfo

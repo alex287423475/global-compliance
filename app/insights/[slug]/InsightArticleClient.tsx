@@ -1,38 +1,82 @@
 "use client";
 
-import type { InsightArticle } from "../../../content/insights";
-import { useEffect, useState } from "react";
+import type { Components } from "react-markdown";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { InsightArticle, InsightFaqItem, InsightTocItem } from "../../../content/insights";
 import SiteHeader from "../../components/SiteHeader";
 
 type Locale = "en" | "zh";
 
 const copy = {
   en: {
-    brand: "Global Bridge Compliance",
-    back: "Back to insights",
+    updated: "Updated",
+    readTime: "Read Time",
     redline: "Redline Terms",
+    toc: "On This Page",
+    faq: "FAQ",
     nextStep: "Next Step",
     nextStepTitle: "Need this risk reviewed against your own materials",
     requestReview: "Request Diagnostic Review",
-    previous: "Previous Brief",
-    next: "Next Brief",
+    previous: "Previous Article",
+    next: "Next Article",
     related: "Related Intelligence",
-    recommended: "Recommended Briefs",
-    read: "Read brief",
+    recommended: "Recommended Reading",
+    read: "Read Article",
+    minutes: "min read",
   },
   zh: {
-    brand: "全球博译合规",
-    back: "返回情报库",
+    updated: "更新日期",
+    readTime: "阅读时长",
     redline: "红线词",
+    toc: "本文目录",
+    faq: "常见问题",
     nextStep: "下一步",
-    nextStepTitle: "需要基于你的材料做一次风险诊断",
-    requestReview: "预约诊断",
+    nextStepTitle: "需要结合你自己的材料做一轮风险诊断",
+    requestReview: "预约合规风险诊断",
     previous: "上一篇",
     next: "下一篇",
     related: "关联情报",
     recommended: "推荐阅读",
-    read: "阅读简报",
+    read: "阅读全文",
+    minutes: "分钟阅读",
   },
+};
+
+const markdownComponents: Components = {
+  h2: ({ children }) => (
+    <h2
+      className="scroll-mt-28 font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950 md:text-4xl"
+      id={headingId(children)}
+    >
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3
+      className="scroll-mt-28 font-[family-name:var(--font-serif)] text-2xl font-medium leading-tight text-blue-950"
+      id={headingId(children)}
+    >
+      {children}
+    </h3>
+  ),
+  p: ({ children }) => <p className="text-base leading-8 text-slate-600">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc space-y-3 pl-5 text-base leading-8 text-slate-600">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal space-y-3 pl-5 text-base leading-8 text-slate-600">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-red-800 bg-red-50/50 py-4 pl-6 font-[family-name:var(--font-serif)] text-xl leading-9 text-slate-700">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }) => (
+    <a className="underline decoration-blue-950/30 underline-offset-4 transition-colors hover:text-blue-950" href={href}>
+      {children}
+    </a>
+  ),
+  strong: ({ children }) => <strong className="font-bold text-blue-950">{children}</strong>,
+  hr: () => <hr className="my-12 border-blue-900/10" />,
 };
 
 export default function InsightArticleClient({
@@ -53,11 +97,12 @@ export default function InsightArticleClient({
 
   useEffect(() => {
     const saved = window.localStorage.getItem("gbc-locale");
-    const nextLocale = saved === "en" || saved === "zh"
-      ? saved
-      : navigator.language.toLowerCase().startsWith("zh")
-        ? "zh"
-        : "en";
+    const nextLocale =
+      saved === "en" || saved === "zh"
+        ? saved
+        : navigator.language.toLowerCase().startsWith("zh")
+          ? "zh"
+          : "en";
     setLocaleState(nextLocale);
     document.documentElement.lang = nextLocale === "zh" ? "zh-CN" : "en";
   }, []);
@@ -68,74 +113,247 @@ export default function InsightArticleClient({
     document.documentElement.lang = nextLocale === "zh" ? "zh-CN" : "en";
   }
 
+  const title = localizedText(locale, article.zhTitle, article.title);
+  const dek = localizedText(locale, article.zhDek, article.dek);
+  const summary = localizedText(locale, article.zhSummary, article.summary);
+  const markdownBody = localizedText(locale, article.zhBodyMarkdown, article.bodyMarkdown);
+  const toc = localizedToc(locale, article.toc);
+  const faq = localizedFaq(locale, article.faq);
+  const readMinutes = useMemo(() => estimateReadMinutes(markdownBody), [markdownBody]);
+
   return (
     <main className="min-h-screen bg-slate-50 text-blue-950">
       <SiteHeader locale={locale} setLocale={setLocale} />
 
-      <article className="mx-auto max-w-3xl px-6 py-20 lg:px-0">
-        <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-          {article.category} / {article.market}
-        </p>
-        <h1 className="font-[family-name:var(--font-serif)] text-5xl font-semibold leading-tight text-blue-950 md:text-6xl">
-          {locale === "zh" ? article.zhTitle : article.title}
-        </h1>
-        <p className="mt-8 text-base leading-8 text-slate-600">
-          {locale === "zh" ? article.zhSummary : article.summary}
-        </p>
-
-        <div className="mt-12 border-l-2 border-red-800 bg-red-50/50 py-5 pl-6">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-800">
-            {t.redline}
+      <article className="mx-auto max-w-7xl px-6 py-20 lg:px-10">
+        <div className="mx-auto max-w-4xl">
+          <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
+            {article.category} / {article.market}
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            {article.redlineTerms.map((term) => (
-              <span className="border border-slate-200 bg-slate-100 px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-700" key={term}>
-                {term}
-              </span>
-            ))}
+
+          <h1 className="font-[family-name:var(--font-serif)] text-5xl font-semibold leading-tight text-blue-950 md:text-7xl">
+            {title}
+          </h1>
+
+          {dek ? <p className="mt-6 font-[family-name:var(--font-serif)] text-2xl leading-10 text-slate-700">{dek}</p> : null}
+
+          <p className="mt-8 max-w-3xl text-base leading-8 text-slate-600">{summary}</p>
+
+          <div className="mt-8 flex flex-wrap gap-6 border-y border-blue-900/10 py-5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <div>
+              <span className="text-slate-400">{t.updated}</span>
+              <div className="mt-2 text-blue-950">{article.updatedAt}</div>
+            </div>
+            <div>
+              <span className="text-slate-400">{t.readTime}</span>
+              <div className="mt-2 text-blue-950">
+                {readMinutes} {t.minutes}
+              </div>
+            </div>
+            <div>
+              <span className="text-slate-400">Risk</span>
+              <div className="mt-2 text-red-800">{article.riskLevel}</div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-14 space-y-12">
-          {article.sections.map((section) => (
-            <section key={section.heading}>
-              <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
-                {locale === "zh" ? section.zhHeading : section.heading}
+        <div className="mx-auto mt-14 grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
+          <div className="min-w-0">
+            <div className="mb-10 border-l-2 border-red-800 bg-red-50/50 py-5 pl-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-800">{t.redline}</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {article.redlineTerms.map((term) => (
+                  <span
+                    className="border border-slate-200 bg-slate-100 px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-700"
+                    key={term}
+                  >
+                    {term}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="prose prose-slate max-w-none space-y-8 prose-headings:scroll-mt-28">
+              {markdownBody ? (
+                <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                  {markdownBody}
+                </ReactMarkdown>
+              ) : (
+                <FallbackSections article={article} locale={locale} />
+              )}
+            </div>
+
+            {faq.length ? (
+              <section className="mt-16 border-t border-blue-900/10 pt-10">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.faq}</p>
+                <div className="mt-6 space-y-6">
+                  {faq.map((item) => (
+                    <div className="border border-blue-900/10 bg-white p-6" key={item.question}>
+                      <h2 className="font-[family-name:var(--font-serif)] text-2xl font-medium text-blue-950">
+                        {item.question}
+                      </h2>
+                      <div className="mt-4 space-y-4">
+                        {splitParagraphs(item.answer).map((paragraph) => (
+                          <p className="text-base leading-8 text-slate-600" key={paragraph}>
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <ArticlePager
+              labels={{ next: t.next, previous: t.previous }}
+              locale={locale}
+              nextArticle={nextArticle}
+              previousArticle={previousArticle}
+            />
+
+            <ArticleRail articles={relatedArticles} label={t.related} locale={locale} readLabel={t.read} />
+            <ArticleRail articles={recommendedArticles} label={t.recommended} locale={locale} readLabel={t.read} />
+
+            <div className="mt-16 border-t border-blue-900/10 pt-8">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.nextStep}</p>
+              <h2 className="mt-4 font-[family-name:var(--font-serif)] text-3xl font-medium text-blue-950">
+                {t.nextStepTitle}
               </h2>
-              <p className="mt-5 text-base leading-8 text-slate-600">
-                {locale === "zh" ? section.zhBody : section.body}
-              </p>
-            </section>
-          ))}
-        </div>
+              <a
+                className="mt-7 inline-flex border border-blue-950 bg-transparent px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                href="/#checkout"
+              >
+                {t.requestReview}
+              </a>
+            </div>
+          </div>
 
-        <ArticlePager
-          labels={{ next: t.next, previous: t.previous }}
-          locale={locale}
-          nextArticle={nextArticle}
-          previousArticle={previousArticle}
-        />
+          <aside className="space-y-6 lg:sticky lg:top-24">
+            {toc.length ? (
+              <div className="border border-blue-900/10 bg-white p-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.toc}</p>
+                <nav className="mt-5 space-y-3">
+                  {toc.map((item) => (
+                    <a
+                      className={`block text-sm leading-6 text-slate-600 transition-colors hover:text-blue-950 ${
+                        item.level === 3 ? "pl-4" : ""
+                      }`}
+                      href={`#${item.id}`}
+                      key={`${item.id}-${item.label}`}
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+            ) : null}
 
-        <ArticleRail articles={relatedArticles} label={t.related} locale={locale} readLabel={t.read} />
-        <ArticleRail articles={recommendedArticles} label={t.recommended} locale={locale} readLabel={t.read} />
-
-        <div className="mt-16 border-t border-blue-900/10 pt-8">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-            {t.nextStep}
-          </p>
-          <h2 className="mt-4 font-[family-name:var(--font-serif)] text-3xl font-medium text-blue-950">
-            {t.nextStepTitle}
-          </h2>
-          <a
-            className="mt-7 inline-flex border border-blue-950 bg-transparent px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
-            href="/#checkout"
-          >
-            {t.requestReview}
-          </a>
+            <div className="border border-blue-900/10 bg-white p-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">Keywords</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {article.relatedKeywords.map((term) => (
+                  <span className="border border-slate-200 bg-slate-100 px-3 py-2 text-xs text-slate-700" key={term}>
+                    {term}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </aside>
         </div>
       </article>
     </main>
   );
+}
+
+function FallbackSections({ article, locale }: { article: InsightArticle; locale: Locale }) {
+  return (
+    <div className="space-y-12">
+      {article.sections.map((section) => (
+        <section key={section.heading}>
+          <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
+            {localizedText(locale, section.zhHeading, section.heading)}
+          </h2>
+          <div className="mt-5 space-y-5 text-base leading-8 text-slate-600">
+            {splitParagraphs(localizedText(locale, section.zhBody, section.body)).map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+        </section>
+      ))}
+      {article.conclusion ? (
+        <section className="border-t border-blue-900/10 pt-10">
+          <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium text-blue-950">Conclusion</h2>
+          <div className="mt-5 space-y-5 text-base leading-8 text-slate-600">
+            {splitParagraphs(localizedText(locale, article.zhConclusion, article.conclusion)).map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function localizedToc(locale: Locale, toc: InsightTocItem[]) {
+  return toc.map((item) => ({
+    ...item,
+    label: localizedText(locale, item.zhLabel, item.label),
+  }));
+}
+
+function localizedFaq(locale: Locale, faq: InsightFaqItem[]) {
+  return faq.map((item) => ({
+    question: localizedText(locale, item.zhQuestion, item.question),
+    answer: localizedText(locale, item.zhAnswer, item.answer),
+  }));
+}
+
+function localizedText(locale: Locale, localized: string | undefined, fallback: string) {
+  if (locale === "zh" && localized && !looksMojibake(localized)) {
+    return localized;
+  }
+  return fallback;
+}
+
+function looksMojibake(text?: string) {
+  if (!text) return false;
+  const markers = ["鍏", "鍚", "鏂", "鐨", "璇", "绔", "€", "鎺", "閫", "寮", "缁", "绾"];
+  return markers.some((marker) => text.includes(marker));
+}
+
+function splitParagraphs(text?: string) {
+  if (!text) return [];
+  return text
+    .split(/\n\s*\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function estimateReadMinutes(text: string) {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(3, Math.ceil(words / 220));
+}
+
+function headingId(children: ReactNode) {
+  const text = flattenChildren(children)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return text || "section";
+}
+
+function flattenChildren(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(flattenChildren).join("");
+  }
+  if (node && typeof node === "object" && "props" in node) {
+    return flattenChildren((node as { props?: { children?: React.ReactNode } }).props?.children);
+  }
+  return "";
 }
 
 function ArticlePager({
@@ -183,7 +401,7 @@ function PagerLink({
     >
       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{label}</p>
       <p className="mt-3 text-sm font-bold leading-6 text-blue-950">
-        {locale === "zh" ? article.zhTitle : article.title}
+        {localizedText(locale, article.zhTitle, article.title)}
       </p>
     </a>
   );
@@ -221,11 +439,10 @@ function ArticleRail({
               </span>
             </div>
             <h3 className="mt-4 text-base font-bold leading-7 text-blue-950">
-              {locale === "zh" ? article.zhTitle : article.title}
+              {localizedText(locale, article.zhTitle, article.title)}
             </h3>
-            <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">
-              {readLabel}
-            </p>
+            <p className="mt-2 text-sm leading-7 text-slate-600">{localizedText(locale, article.zhDek, article.dek)}</p>
+            <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">{readLabel}</p>
           </a>
         ))}
       </div>

@@ -529,18 +529,52 @@ with tab_review:
         with left:
             st.caption(article.get("category", "Unknown"))
             st.header(article.get("zhTitle") or article.get("title"))
+            if article.get("zhDek") or article.get("dek"):
+                st.markdown("**%s**" % (article.get("zhDek") or article.get("dek")))
             st.write(article.get("zhSummary") or article.get("summary"))
         with right:
             st.metric("Risk", article.get("riskLevel", "Unknown"))
             st.metric("Market", article.get("market", "Unknown"))
             st.metric("Sections", len(article.get("sections", [])))
+            body_text = article.get("bodyMarkdown") or ""
+            st.metric("Words", len(str(body_text).split()))
+
+        if article.get("zhIntroduction") or article.get("introduction"):
+            st.markdown("#### 导语")
+            st.write(article.get("zhIntroduction") or article.get("introduction"))
+
+        takeaways = article.get("zhKeyTakeaways") or article.get("keyTakeaways") or []
+        if takeaways:
+            st.markdown("#### 核心要点")
+            for item in takeaways:
+                st.markdown("- %s" % item)
 
         st.markdown("#### 红线词")
         st.write(" / ".join("`%s`" % term for term in article.get("redlineTerms", [])))
+        if article.get("toc"):
+            st.markdown("#### 目录")
+            for item in article.get("toc", []):
+                label = item.get("zhLabel") or item.get("label")
+                indent = "  " if item.get("level") == 3 else ""
+                st.markdown(f"{indent}- {label}")
+
         st.markdown("#### 正文预览")
-        for section in article.get("sections", []):
-            st.markdown("##### %s" % (section.get("zhHeading") or section.get("heading")))
-            st.write(section.get("zhBody") or section.get("body"))
+        if article.get("zhBodyMarkdown") or article.get("bodyMarkdown"):
+            st.markdown(article.get("zhBodyMarkdown") or article.get("bodyMarkdown"))
+        else:
+            for section in article.get("sections", []):
+                st.markdown("##### %s" % (section.get("zhHeading") or section.get("heading")))
+                st.write(section.get("zhBody") or section.get("body"))
+
+        if article.get("faq"):
+            st.markdown("#### FAQ")
+            for item in article.get("faq", []):
+                st.markdown("##### %s" % (item.get("zhQuestion") or item.get("question")))
+                st.write(item.get("zhAnswer") or item.get("answer"))
+
+        if article.get("zhConclusion") or article.get("conclusion"):
+            st.markdown("#### 结尾")
+            st.write(article.get("zhConclusion") or article.get("conclusion"))
 
         with st.expander("原始 JSON"):
             st.json(article)
