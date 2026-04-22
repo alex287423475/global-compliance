@@ -160,8 +160,25 @@ def render_workflow_progress(events, output_lines, progress_box, log_box):
         "blocked": "[BLOCKED]",
         "failed": "[FAILED]",
     }
+    messages = {
+        "pending": "等待",
+        "pipeline_started": "开始处理文章",
+        "pipeline_completed": "文章生产完成",
+        "researcher_started": "检索本地 RAG / VOC，并提取风险红线",
+        "researcher_completed": "情报整理完成",
+        "writer_started": "根据情报与红线撰写草稿",
+        "writer_completed": "草稿已生成",
+        "writer_rewrite_started": "根据 Reviewer 意见重写草稿",
+        "writer_rewrite_completed": "重写稿已生成",
+        "reviewer_started": "交叉审查红线词、过度承诺与合规语态",
+        "reviewer_completed": "审核通过",
+        "reviewer_rejected": "审核未通过，打回 Writer 重写",
+        "reviewer_blocked": "超过最大重写次数，生产线阻断",
+        "failsafe_started": "执行结构化字段与违禁词终检",
+        "failsafe_completed": "终检通过，JSON 草稿已写入",
+    }
     states = {
-        agent: {"status": "pending", "message": "等待", "time": "", "seed": ""}
+        agent: {"status": "pending", "message_code": "pending", "time": "", "seed": ""}
         for agent in agent_order
     }
     for event in events:
@@ -169,7 +186,7 @@ def render_workflow_progress(events, output_lines, progress_box, log_box):
         if agent in states:
             states[agent] = {
                 "status": event.get("status", "running"),
-                "message": event.get("message", ""),
+                "message_code": event.get("message_code", "pending"),
                 "time": event.get("time", ""),
                 "seed": event.get("seed", ""),
             }
@@ -183,7 +200,7 @@ def render_workflow_progress(events, output_lines, progress_box, log_box):
                 "Step": "%02d" % index,
                 "Agent": labels[agent],
                 "Status": icons.get(status, status),
-                "Message": state["message"],
+                "Message": messages.get(state["message_code"], state["message_code"]),
                 "Time": state["time"],
                 "Article": state["seed"],
             }

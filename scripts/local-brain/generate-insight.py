@@ -7,6 +7,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+import ssl
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
@@ -119,18 +120,18 @@ def append_trace(state: WorkflowState, agent: str, action: str, data: Dict[str, 
     return state.get("trace", []) + [{"agent": agent, "action": action, "data": data}]
 
 
-def emit_progress(seed: str, agent: str, status: str, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+def emit_progress(seed: str, agent: str, status: str, message_code: str, data: Optional[Dict[str, Any]] = None) -> None:
     if os.environ.get("LOCAL_BRAIN_PROGRESS") != "1":
         return
     event = {
         "seed": seed,
         "agent": agent,
         "status": status,
-        "message": message,
+        "message_code": message_code,
         "data": data or {},
         "time": dt.datetime.now().strftime("%H:%M:%S"),
     }
-    print(PROGRESS_PREFIX + json.dumps(event, ensure_ascii=False), flush=True)
+    print(PROGRESS_PREFIX + json.dumps(event, ensure_ascii=True), flush=True)
 
 
 def slugify(text: str) -> str:
@@ -275,8 +276,17 @@ class OpenAICompatibleClient:
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
             raise PipelineError("LLM request failed: HTTP %s %s" % (exc.code, body[:800]))
+        except ssl.SSLError as exc:
+            raise PipelineError(
+                "LLM SSL connection failed. Check API Base URL, proxy/VPN, and provider endpoint. Details: %s"
+                % exc
+            )
         except urllib.error.URLError as exc:
-            raise PipelineError("LLM request failed: %s" % exc)
+            reason = getattr(exc, "reason", exc)
+            raise PipelineError(
+                "LLM network request failed. Check API Base URL, proxy/VPN, and provider endpoint. Details: %s"
+                % reason
+            )
 
         response_data = json.loads(raw)
         content = response_data["choices"][0]["message"]["content"]
@@ -361,7 +371,7 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
     profiles = state["profiles"]
     forbidden_terms = state["forbidden_terms"]
     seed = state["seed"]
-    emit_progress(seed, "Researcher Agent", "running", "检索本地 RAG / VOC，并提取风险红线")
+    emit_progress(seed, "Researcher Agent", "running", "researcher_started")
     profile_key, profile = select_profile(seed, profiles)
     strict_terms = (
         forbidden_terms.get("global", [])
@@ -412,7 +422,7 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
         seed,
         "Researcher Agent",
         "completed",
-        "情报整理完成",
+        "researcher_completed",
         {
             "profile": profile_key,
             "source_count": len(source_snippets),
@@ -495,7 +505,7 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
         seed,
         "Writer Agent",
         "running",
-        "根据情报与红线撰写草稿" if revision_count == 0 else "根据 Reviewer 意见重写草稿",
+        "writer_started" if revision_count == 0 else "writer_rewrite_started",
         {"revision": revision_count},
     )
     safe_seed = sanitize_claim_text(seed) if revision_count > 0 else seed
@@ -535,7 +545,7 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
         seed,
         "Writer Agent",
         "completed",
-        "草稿已生成" if revision_count == 0 else "重写稿已生成",
+        "writer_completed" if revision_count == 0 else "writer_rewrite_completed",
         {"revision": revision_count, "slug": article.get("slug"), "title": article.get("title")},
     )
     return {
@@ -573,7 +583,7 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
         seed,
         "Reviewer Agent",
         "running",
-        "交叉审查红线词、过度承诺与合规语态",
+        "reviewer_started",
         {"revision": state.get("revision_count", 0)},
     )
     passed, findings, feedback = deterministic_review(state)
@@ -592,11 +602,11 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
     revision_count = state.get("revision_count", 0)
     blocked = (not passed) and revision_count >= MAX_REVISIONS
     if passed:
-        emit_progress(seed, "Reviewer Agent", "completed", "审核通过", {"revision": revision_count})
+        emit_progress(seed, "Reviewer Agent", "completed", "reviewer_completed", {"revision": revision_count})
     elif blocked:
-        emit_progress(seed, "Reviewer Agent", "blocked", "超过最大重写次数，生产线阻断", {"revision": revision_count, "findings": findings})
+        emit_progress(seed, "Reviewer Agent", "blocked", "reviewer_blocked", {"revision": revision_count, "findings": findings})
     else:
-        emit_progress(seed, "Reviewer Agent", "rejected", "审核未通过，打回 Writer 重写", {"revision": revision_count, "findings": findings})
+        emit_progress(seed, "Reviewer Agent", "rejected", "reviewer_rejected", {"revision": revision_count, "findings": findings})
     return {
         "review_passed": passed,
         "review_findings": findings,
@@ -743,11 +753,11 @@ def main():
     if args.no_llm:
         raise PipelineError("--no-llm is forbidden. This production line requires LLM-based Researcher / Writer / Reviewer execution.")
 
-    emit_progress(args.seed, "Pipeline", "running", "开始处理文章")
+    emit_progress(args.seed, "Pipeline", "running", "pipeline_started")
     state = run_workflow(args.seed, notes, profiles, forbidden_terms, args.source_dir, args.reviews_dir)
     if state.get("blocked"):
         raise PipelineError("Reviewer blocked the article after %s revision(s): %s" % (state.get("revision_count", 0), ", ".join(state.get("review_findings", []))))
-    emit_progress(args.seed, "Fail-Safe", "running", "执行结构化字段与违禁词终检")
+    emit_progress(args.seed, "Fail-Safe", "running", "failsafe_started")
     article = validate_article(state["article"], state.get("strict_terms", []))
     draft_dir = root / args.draft_dir
     audit_dir = root / args.audit_dir
@@ -781,8 +791,8 @@ def main():
         + "\n",
         encoding="utf-8",
     )
-    emit_progress(args.seed, "Fail-Safe", "completed", "终检通过，JSON 草稿已写入", {"output": str(output_path), "audit": str(audit_path)})
-    emit_progress(args.seed, "Pipeline", "completed", "文章生产完成", {"output": str(output_path)})
+    emit_progress(args.seed, "Fail-Safe", "completed", "failsafe_completed", {"output": str(output_path), "audit": str(audit_path)})
+    emit_progress(args.seed, "Pipeline", "completed", "pipeline_completed", {"output": str(output_path)})
     print("Local Brain draft generated:")
     print("  runtime: %s" % ("LangGraph StateGraph" if LANGGRAPH_AVAILABLE else "compatibility fallback"))
     print("  llm: %s" % ("enabled" if state.get("use_llm") else "disabled"))
