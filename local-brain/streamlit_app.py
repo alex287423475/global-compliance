@@ -1,7 +1,10 @@
 import json
 import os
+import socket
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import streamlit as st
@@ -134,6 +137,64 @@ def run_command(args, timeout=180):
     )
     output = "\n".join(part for part in [completed.stdout, completed.stderr] if part)
     return completed.returncode, output.strip()
+
+
+def test_llm_connection(config, timeout=30):
+    api_key = (config.get("api_key") or "").strip()
+    if not api_key:
+        return False, "API Key 为空。请先填写并保存 API Key。"
+
+    base_url = (config.get("base_url") or "").strip().rstrip("/")
+    model = (config.get("model") or "").strip()
+    if not base_url or not model:
+        return False, "API Base URL 或模型为空。请先选择提供商，或点击恢复默认 URL / 模型。"
+
+    payload = {
+        "model": model,
+        "temperature": 0,
+        "max_tokens": 16,
+        "messages": [
+            {"role": "system", "content": "Reply with OK only."},
+            {"role": "user", "content": "Connection test."},
+        ],
+    }
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        base_url + "/chat/completions",
+        data=data,
+        headers={
+            "Authorization": "Bearer " + api_key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response_data = json.loads(response.read().decode("utf-8"))
+    except TimeoutError:
+        return False, "请求超过 %s 秒未返回。请检查代理、Base URL 或模型服务是否可达。" % timeout
+    except socket.timeout:
+        return False, "请求超过 %s 秒未返回。请检查代理、Base URL 或模型服务是否可达。" % timeout
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return False, "HTTP %s: %s" % (exc.code, body[:800])
+    except urllib.error.URLError as exc:
+        return False, "网络连接失败：%s" % exc
+    except Exception as exc:
+        return False, "测试失败：%s" % exc
+
+    content = (
+        response_data.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+        .strip()
+    )
+    return True, "API 连通成功。provider=%s, model=%s, response=%s" % (
+        config.get("provider", "unknown"),
+        model,
+        content[:80] or "EMPTY",
+    )
 
 
 def list_drafts():
@@ -437,27 +498,19 @@ with tab_config:
             st.success("已保存。请重新运行一次生产任务以使用新配置。")
     with col_test:
         if st.button("测试 LLM 配置"):
-            save_llm_config(
-                {
-                    "provider": provider,
-                    "base_url": st.session_state.llm_base_url.strip() or provider_defaults["base_url"],
-                    "model": st.session_state.llm_model.strip() or provider_defaults["model"],
-                    "api_key": st.session_state.llm_api_key.strip(),
-                }
-            )
-            args = [
-                PYTHON_EXE,
-                "scripts/local-brain/generate-insight.py",
-                "--seed",
-                "PayPal Stripe account review",
-                "--draft-dir",
-                "local-brain/tmp-drafts",
-                "--audit-dir",
-                "local-brain/tmp-audits",
-                "--overwrite",
-            ]
-            code, output = run_command(args, timeout=180)
-            show_command_result(code, output, "LLM 配置可用，测试草稿已生成到临时目录")
+            config = {
+                "provider": provider,
+                "base_url": st.session_state.llm_base_url.strip() or provider_defaults["base_url"],
+                "model": st.session_state.llm_model.strip() or provider_defaults["model"],
+                "api_key": st.session_state.llm_api_key.strip(),
+            }
+            save_llm_config(config)
+            with st.spinner("正在测试 API 连通性，最多等待 30 秒..."):
+                ok, message = test_llm_connection(config, timeout=30)
+            if ok:
+                st.success(message)
+            else:
+                st.error(message)
 
     st.write("当前生效配置")
     active_config = effective_llm_config()
