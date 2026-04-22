@@ -1,8 +1,11 @@
 import json
 import os
+import queue
 import socket
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -20,6 +23,7 @@ CONFIG_PATH = REPO_ROOT / "local-brain" / "config.json"
 SEEDS_FILE = REPO_ROOT / "local-brain" / "seeds.txt"
 EXAMPLE_SEEDS_FILE = REPO_ROOT / "local-brain" / "seeds.example.txt"
 PYTHON_EXE = sys.executable
+PROGRESS_PREFIX = "[LOCAL_BRAIN_PROGRESS] "
 
 
 st.set_page_config(page_title="Local Brain 控制台", page_icon="LB", layout="wide")
@@ -137,6 +141,121 @@ def run_command(args, timeout=180):
     )
     output = "\n".join(part for part in [completed.stdout, completed.stderr] if part)
     return completed.returncode, output.strip()
+
+
+def render_workflow_progress(events, output_lines, progress_box, log_box):
+    agent_order = ["Pipeline", "Researcher Agent", "Writer Agent", "Reviewer Agent", "Fail-Safe"]
+    labels = {
+        "Pipeline": "Pipeline",
+        "Researcher Agent": "Researcher",
+        "Writer Agent": "Writer",
+        "Reviewer Agent": "Reviewer",
+        "Fail-Safe": "Fail-Safe",
+    }
+    icons = {
+        "pending": "[ ]",
+        "running": "[RUNNING]",
+        "completed": "[DONE]",
+        "rejected": "[REWRITE]",
+        "blocked": "[BLOCKED]",
+        "failed": "[FAILED]",
+    }
+    states = {
+        agent: {"status": "pending", "message": "等待", "time": "", "seed": ""}
+        for agent in agent_order
+    }
+    for event in events:
+        agent = event.get("agent")
+        if agent in states:
+            states[agent] = {
+                "status": event.get("status", "running"),
+                "message": event.get("message", ""),
+                "time": event.get("time", ""),
+                "seed": event.get("seed", ""),
+            }
+
+    rows = []
+    for index, agent in enumerate(agent_order, start=1):
+        state = states[agent]
+        status = state["status"]
+        rows.append(
+            {
+                "Step": "%02d" % index,
+                "Agent": labels[agent],
+                "Status": icons.get(status, status),
+                "Message": state["message"],
+                "Time": state["time"],
+                "Article": state["seed"],
+            }
+        )
+    progress_box.dataframe(rows, use_container_width=True, hide_index=True)
+    if output_lines:
+        log_box.code("\n".join(output_lines[-18:]), language="text")
+
+
+def run_command_stream(args, timeout=600):
+    env = os.environ.copy()
+    env["LOCAL_BRAIN_PROGRESS"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
+    output_lines = []
+    events = []
+    progress_box = st.empty()
+    log_box = st.empty()
+    render_workflow_progress(events, output_lines, progress_box, log_box)
+
+    process = subprocess.Popen(
+        args,
+        cwd=str(REPO_ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+        shell=False,
+        env=env,
+    )
+    line_queue = queue.Queue()
+
+    def read_output():
+        assert process.stdout is not None
+        for raw_line in iter(process.stdout.readline, ""):
+            line_queue.put(raw_line)
+        process.stdout.close()
+
+    reader = threading.Thread(target=read_output, daemon=True)
+    reader.start()
+    start = time.monotonic()
+
+    while True:
+        timed_out = time.monotonic() - start > timeout
+        if timed_out and process.poll() is None:
+            process.kill()
+            output_lines.append("Command timed out after %s seconds." % timeout)
+            render_workflow_progress(events, output_lines, progress_box, log_box)
+            return 124, "\n".join(output_lines).strip()
+
+        try:
+            line = line_queue.get(timeout=0.2).rstrip()
+        except queue.Empty:
+            if process.poll() is not None and line_queue.empty():
+                break
+            continue
+
+        if not line:
+            continue
+        if line.startswith(PROGRESS_PREFIX):
+            try:
+                events.append(json.loads(line[len(PROGRESS_PREFIX) :]))
+            except json.JSONDecodeError:
+                output_lines.append(line)
+        else:
+            output_lines.append(line)
+        render_workflow_progress(events, output_lines, progress_box, log_box)
+
+    return_code = process.wait()
+    render_workflow_progress(events, output_lines, progress_box, log_box)
+    return return_code, "\n".join(output_lines).strip()
 
 
 def test_llm_connection(config, timeout=30):
@@ -340,7 +459,7 @@ with tab_generate:
                     args.extend(["--notes-file", rel(write_temp_notes(operator_notes))])
                 if overwrite:
                     args.append("--overwrite")
-                code, output = run_command(args, timeout=360)
+                code, output = run_command_stream(args, timeout=420)
                 show_command_result(code, output, "生产线已完成，草稿已生成")
     else:
         seed_text = st.text_area("批量种子词，每行一个", value=read_seed_text(), height=220)
@@ -357,8 +476,8 @@ with tab_generate:
             ]
             if overwrite_batch:
                 args.append("-Overwrite")
-            code, output = run_command(args, timeout=600)
-            show_command_result(code, output, "批量生产完成并通过干跑校验")
+            code, output = run_command_stream(args, timeout=900)
+            show_command_result(code, output, "批量生产完成并通过导入校验")
 
     st.divider()
     st.subheader("最近一次审计")

@@ -8,7 +8,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 
 try:
@@ -37,6 +37,7 @@ ALLOWED_CATEGORIES = {
 
 ALLOWED_RISK_LEVELS = {"Critical", "High", "Medium"}
 MAX_REVISIONS = 3
+PROGRESS_PREFIX = "[LOCAL_BRAIN_PROGRESS] "
 
 FORBIDDEN_REPLACEMENTS = {
     "100% safe": "evidence-backed",
@@ -116,6 +117,20 @@ def load_local_brain_config(path: Path) -> Dict[str, Any]:
 
 def append_trace(state: WorkflowState, agent: str, action: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return state.get("trace", []) + [{"agent": agent, "action": action, "data": data}]
+
+
+def emit_progress(seed: str, agent: str, status: str, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    if os.environ.get("LOCAL_BRAIN_PROGRESS") != "1":
+        return
+    event = {
+        "seed": seed,
+        "agent": agent,
+        "status": status,
+        "message": message,
+        "data": data or {},
+        "time": dt.datetime.now().strftime("%H:%M:%S"),
+    }
+    print(PROGRESS_PREFIX + json.dumps(event, ensure_ascii=False), flush=True)
 
 
 def slugify(text: str) -> str:
@@ -346,6 +361,7 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
     profiles = state["profiles"]
     forbidden_terms = state["forbidden_terms"]
     seed = state["seed"]
+    emit_progress(seed, "Researcher Agent", "running", "检索本地 RAG / VOC，并提取风险红线")
     profile_key, profile = select_profile(seed, profiles)
     strict_terms = (
         forbidden_terms.get("global", [])
@@ -392,6 +408,18 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
         }
         redline_terms = list(dict.fromkeys(redline_terms + list(result.get("red_lines", []))))
 
+    emit_progress(
+        seed,
+        "Researcher Agent",
+        "completed",
+        "情报整理完成",
+        {
+            "profile": profile_key,
+            "source_count": len(source_snippets),
+            "review_count": len(review_snippets),
+            "redline_count": len(redline_terms),
+        },
+    )
     return {
         "profile_key": profile_key,
         "profile": profile,
@@ -463,6 +491,13 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
 def writer_agent(state: WorkflowState) -> Dict[str, Any]:
     revision_count = state.get("revision_count", 0)
     seed = state["seed"]
+    emit_progress(
+        seed,
+        "Writer Agent",
+        "running",
+        "根据情报与红线撰写草稿" if revision_count == 0 else "根据 Reviewer 意见重写草稿",
+        {"revision": revision_count},
+    )
     safe_seed = sanitize_claim_text(seed) if revision_count > 0 else seed
     article = build_fallback_article(state, safe_seed=safe_seed, revision_count=revision_count)
     llm = state.get("llm")
@@ -496,6 +531,13 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
             temperature=0.35,
         )
 
+    emit_progress(
+        seed,
+        "Writer Agent",
+        "completed",
+        "草稿已生成" if revision_count == 0 else "重写稿已生成",
+        {"revision": revision_count, "slug": article.get("slug"), "title": article.get("title")},
+    )
     return {
         "article": article,
         "trace": append_trace(
@@ -526,6 +568,14 @@ def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
 
 
 def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
+    seed = state["seed"]
+    emit_progress(
+        seed,
+        "Reviewer Agent",
+        "running",
+        "交叉审查红线词、过度承诺与合规语态",
+        {"revision": state.get("revision_count", 0)},
+    )
     passed, findings, feedback = deterministic_review(state)
     llm = state.get("llm")
     if state.get("use_llm") and llm and llm.available and passed:
@@ -541,6 +591,12 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
 
     revision_count = state.get("revision_count", 0)
     blocked = (not passed) and revision_count >= MAX_REVISIONS
+    if passed:
+        emit_progress(seed, "Reviewer Agent", "completed", "审核通过", {"revision": revision_count})
+    elif blocked:
+        emit_progress(seed, "Reviewer Agent", "blocked", "超过最大重写次数，生产线阻断", {"revision": revision_count, "findings": findings})
+    else:
+        emit_progress(seed, "Reviewer Agent", "rejected", "审核未通过，打回 Writer 重写", {"revision": revision_count, "findings": findings})
     return {
         "review_passed": passed,
         "review_findings": findings,
@@ -687,9 +743,11 @@ def main():
     if args.no_llm:
         raise PipelineError("--no-llm is forbidden. This production line requires LLM-based Researcher / Writer / Reviewer execution.")
 
+    emit_progress(args.seed, "Pipeline", "running", "开始处理文章")
     state = run_workflow(args.seed, notes, profiles, forbidden_terms, args.source_dir, args.reviews_dir)
     if state.get("blocked"):
         raise PipelineError("Reviewer blocked the article after %s revision(s): %s" % (state.get("revision_count", 0), ", ".join(state.get("review_findings", []))))
+    emit_progress(args.seed, "Fail-Safe", "running", "执行结构化字段与违禁词终检")
     article = validate_article(state["article"], state.get("strict_terms", []))
     draft_dir = root / args.draft_dir
     audit_dir = root / args.audit_dir
@@ -723,6 +781,8 @@ def main():
         + "\n",
         encoding="utf-8",
     )
+    emit_progress(args.seed, "Fail-Safe", "completed", "终检通过，JSON 草稿已写入", {"output": str(output_path), "audit": str(audit_path)})
+    emit_progress(args.seed, "Pipeline", "completed", "文章生产完成", {"output": str(output_path)})
     print("Local Brain draft generated:")
     print("  runtime: %s" % ("LangGraph StateGraph" if LANGGRAPH_AVAILABLE else "compatibility fallback"))
     print("  llm: %s" % ("enabled" if state.get("use_llm") else "disabled"))

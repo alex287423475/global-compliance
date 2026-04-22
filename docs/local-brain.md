@@ -84,6 +84,8 @@ local-brain/config.json
 
 配置页里的“测试 LLM 配置”只做一次轻量 API 连通性探针，最多等待 30 秒，不再触发完整文章生产线。完整生产线请在 `1. 生产草稿` 中运行。
 
+运行生产线时，Streamlit 会实时显示文章在 `Researcher -> Writer -> Reviewer -> Fail-Safe` 之间的流转进度。每个 Agent 的开始、通过、打回重写或阻断状态都会同步刷新到前端，不需要等待整篇文章结束后才看到结果。
+
 也可以使用环境变量兜底；如果已经在 Streamlit 前端保存过配置，以前端配置为准：
 
 ```bash
