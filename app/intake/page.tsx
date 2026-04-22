@@ -17,7 +17,7 @@ const content = {
       "Use these forms only after a diagnostic review or when instructed by the case team. Each form is designed for a specific case type so the evidence file stays structured, relevant, and reviewable.",
     noticeTitle: "Material Safety Notice",
     notice:
-      "Do not upload unrelated personal data. Redact nonessential customer information where possible. For highly sensitive matters, request an NDA before submitting full evidence files. Formal submissions: intake@qqbytop.com.",
+      "Do not upload unrelated personal data. Redact nonessential customer information where possible. For highly sensitive matters, request an NDA before submitting full evidence files. Formal submissions: intake@qqbytran.com.",
     badge: "Intake",
     openForm: "Open form",
     gated: "Available after review",
@@ -76,7 +76,7 @@ const content = {
     copy:
       "请在完成初步诊断或收到项目团队指引后使用这些表单。每个表单对应一种案件类型，确保证据文件结构清晰、材料相关、便于审阅。",
     noticeTitle: "材料安全提示",
-    notice: "请勿上传无关个人信息。可先脱敏客户资料；如涉及高度敏感材料，请先申请 NDA 后再提交完整证据文件。正式材料提交：intake@qqbytop.com。",
+    notice: "请勿上传无关个人信息。可先脱敏客户资料；如涉及高度敏感材料，请先申请 NDA 后再提交完整证据文件。正式材料提交：intake@qqbytran.com。",
     badge: "资料表",
     openForm: "打开表单",
     gated: "诊断后开放",

@@ -15,7 +15,7 @@ const content = {
       "Use this form only after a diagnostic review or when instructed by the case team. Upload only necessary evidence. Redact unrelated personal data when possible.",
     noticeTitle: "Evidence Safety Notice",
     notice:
-      "Upload only files that support the dispute response. Remove unrelated personal data where possible. For highly sensitive cases, request an NDA before sending complete records. Formal submissions: intake@qqbytop.com.",
+      "Upload only files that support the dispute response. Remove unrelated personal data where possible. For highly sensitive cases, request an NDA before sending complete records. Formal submissions: intake@qqbytran.com.",
     name: "Name",
     email: "Email",
     company: "Company / Brand",
@@ -59,7 +59,7 @@ const content = {
     copy:
       "请仅在完成初步诊断或收到项目团队指引后填写。只上传必要证据；如有无关个人信息，请尽量先做脱敏处理。",
     noticeTitle: "证据安全提示",
-    notice: "仅上传支持拒付抗辩的必要文件。可先删除无关个人信息；高度敏感案件请先申请 NDA 后再发送完整记录。正式材料提交：intake@qqbytop.com。",
+    notice: "仅上传支持拒付抗辩的必要文件。可先删除无关个人信息；高度敏感案件请先申请 NDA 后再发送完整记录。正式材料提交：intake@qqbytran.com。",
     name: "称呼",
     email: "邮箱",
     company: "公司 / 品牌",

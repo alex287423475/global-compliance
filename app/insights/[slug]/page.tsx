@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import InsightArticleClient from "./InsightArticleClient";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.qqbytop.com";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.qqbytran.com";
 
 export function generateStaticParams() {
   return insightArticles.map((article) => ({ slug: article.slug }));

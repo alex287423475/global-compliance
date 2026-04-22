@@ -186,8 +186,8 @@ const content = {
     phone: "+1 (510) 403-1744",
     contactEmailLabel: "General inquiries",
     intakeEmailLabel: "Formal submissions",
-    contactEmail: "contact@qqbytop.com",
-    intakeEmail: "intake@qqbytop.com",
+    contactEmail: "contact@qqbytran.com",
+    intakeEmail: "intake@qqbytran.com",
   },
   zh: {
     brand: "全球博译合规",
@@ -368,8 +368,8 @@ const content = {
     phone: "+1 (510) 403-1744",
     contactEmailLabel: "普通咨询",
     intakeEmailLabel: "正式材料提交",
-    contactEmail: "contact@qqbytop.com",
-    intakeEmail: "intake@qqbytop.com",
+    contactEmail: "contact@qqbytran.com",
+    intakeEmail: "intake@qqbytran.com",
   },
 } satisfies Record<Locale, Record<string, unknown>>;
 

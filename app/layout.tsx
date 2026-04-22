@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { EB_Garamond, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.qqbytop.com";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.qqbytran.com";
 
 const serif = EB_Garamond({
   subsets: ["latin"],
