@@ -44,16 +44,6 @@ function Push-WithFallback {
   }
 }
 
-function Get-GitStatusPath {
-  param([string]$Line)
-
-  if ($Line.Length -le 3) {
-    return ""
-  }
-
-  return $Line.Substring(3).Trim()
-}
-
 Write-Step "Checking workspace"
 
 if (-not (Test-Path -LiteralPath $DraftDir)) {
@@ -66,21 +56,10 @@ if ($DraftFiles.Count -eq 0) {
   throw "No JSON draft files found in $DraftDir"
 }
 
-$InitialStatus = @(git status --porcelain)
-
 if (-not $Force) {
-  $BlockedChanges = @(
-    $InitialStatus | Where-Object {
-      $Path = Get-GitStatusPath $_
-      $NormalizedPath = $Path -replace "\\", "/"
-      $NormalizedPath -ne "" -and -not $NormalizedPath.StartsWith("local-brain/drafts/")
-    }
-  )
-
-  if ($BlockedChanges.Count -gt 0) {
-    Write-Host "Unrelated local changes were found. Commit or stash them first, or rerun with -Force." -ForegroundColor Yellow
-    $BlockedChanges | ForEach-Object { Write-Host "  $_" }
-    exit 1
+  $DirtyStatus = @(git status --porcelain)
+  if ($DirtyStatus.Count -gt 0) {
+    Write-Host "Workspace has local changes. Publish will stage only website content and public insight assets." -ForegroundColor Yellow
   }
 }
 
@@ -98,14 +77,6 @@ Invoke-Checked "Importing insight drafts" {
   & npm.cmd run brain:add-batch -- $DraftDir
 }
 
-$ContentStatus = @(git status --porcelain -- content/insights.ts)
-
-if ($ContentStatus.Count -eq 0) {
-  Write-Step "No new articles"
-  Write-Host "All draft slugs already exist in content/insights.ts. Nothing was published."
-  exit 0
-}
-
 Invoke-Checked "Building site" {
   & npm.cmd run build
 }
@@ -115,24 +86,27 @@ if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
 }
 
 Invoke-Checked "Staging changes" {
-  & git add -- content/insights.ts $DraftDir
+  $StageTargets = @("content/insights.ts")
+  if (Test-Path -LiteralPath "public/insights") {
+    $StageTargets += "public/insights"
+  }
+  & git add -- $StageTargets
 }
 
 $StagedStatus = @(git diff --cached --name-only)
 
-if ($StagedStatus.Count -eq 0) {
+if ($StagedStatus.Count -gt 0) {
+  Invoke-Checked "Committing" {
+    & git commit -m $CommitMessage
+  }
+} else {
   Write-Step "No staged changes"
-  Write-Host "Nothing to commit."
-  exit 0
-}
-
-Invoke-Checked "Committing" {
-  & git commit -m $CommitMessage
+  Write-Host "No new website content needed a commit. Push will still run in case the local branch is ahead of GitHub."
 }
 
 if ($NoPush) {
   Write-Step "Done"
-  Write-Host "Committed locally. Push was skipped because -NoPush was set."
+  Write-Host "Publish flow completed locally. Push was skipped because -NoPush was set."
   exit 0
 }
 

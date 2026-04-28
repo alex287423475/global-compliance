@@ -806,6 +806,13 @@ export function LocalBrainDashboard() {
     return selectedDraftRows.length > 0 ? selectedDraftRows.map((item) => item.slug) : drafts.map((item) => item.slug);
   }
 
+  function selectedOrApprovedDraftSlugs() {
+    if (selectedDraftRows.length > 0) {
+      return selectedDraftRows.map((item) => item.slug);
+    }
+    return drafts.filter((draft) => auditsBySlug.get(draft.slug)?.approved).map((draft) => draft.slug);
+  }
+
   async function handleGenerate() {
     const selectedRows =
       selectedKeywordRows.length > 0
@@ -877,17 +884,17 @@ export function LocalBrainDashboard() {
 
   async function handlePublish() {
     if (confirmPublish.trim() !== "PUBLISH") {
-      setError("Type PUBLISH before publishing.");
+      setError("发布前请先输入 PUBLISH。");
       return;
     }
-    const selected = selectedOrPendingDraftSlugs();
+    const selected = selectedOrApprovedDraftSlugs();
     if (selected.length === 0) {
-      setError("No drafts available for publishing.");
+      setError("没有可发布草稿。请勾选草稿，或先完成 AI 质检与审核通过。");
       return;
     }
     const blocked = selected.filter((slug) => !auditsBySlug.get(slug)?.approved);
     if (blocked.length > 0) {
-      setError(`Approval required before publish: ${blocked.slice(0, 5).join(", ")}`);
+      setError(`以下草稿尚未审核通过，不能发布：${blocked.slice(0, 5).join(", ")}`);
       return;
     }
     await runWorkflow("publish", {

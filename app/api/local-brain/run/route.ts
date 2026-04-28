@@ -1,10 +1,11 @@
-import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { NextRequest, NextResponse } from "next/server";
 import { currentStatus, ensureDir, nowIso, requestsDir, runtimeDir, writeJsonFile } from "../../../../lib/local-brain-core";
 
 export const runtime = "nodejs";
+
+const supportedActions = new Set(["generate", "images", "visuals", "review", "rewrite", "validate", "approve", "publish"]);
 
 export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
@@ -18,8 +19,8 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const action = String(body.action || "").trim();
-  if (!["generate", "images", "visuals", "review", "rewrite", "validate", "approve", "publish"].includes(action)) {
-    return NextResponse.json({ message: "Unsupported action" }, { status: 400 });
+  if (!supportedActions.has(action)) {
+    return NextResponse.json({ message: "不支持的流程动作。" }, { status: 400 });
   }
 
   ensureDir(requestsDir);
