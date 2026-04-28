@@ -1158,7 +1158,7 @@ export function LocalBrainDashboard() {
               <div className="mt-4 rounded-[8px] bg-slate-950 p-4">
                 <p className="text-xs text-slate-500">{formatDate(latestLog.time)}</p>
                 <p className="mt-2 font-semibold text-white">{latestLog.step}</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{latestLog.message}</p>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{compactLogMessage(latestLog.message, 320)}</p>
               </div>
             ) : (
               <Empty text="暂无运行事件。" />
@@ -1795,14 +1795,29 @@ function StatusPill({ children, tone }: { children: ReactNode; tone: "green" | "
   return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${className}`}>{children}</span>;
 }
 
+function compactLogMessage(value: string, maxLength = 420) {
+  const lines = String(value || "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("[LOCAL_BRAIN_PROGRESS]"))
+    .filter((line) => !/^Traceback \(most recent call last\):/u.test(line))
+    .filter((line) => !/^\s*File ".*", line \d+/u.test(line))
+    .filter((line) => !/^\^+$/u.test(line))
+    .filter((line) => !/^(main\(\)|state = |return self\.invoke|raise )/u.test(line));
+  const text = (lines.length ? lines.join("\n") : String(value || "").trim()).replace(/\n{3,}/gu, "\n\n");
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
 function RunBanner({ latestLog, status }: { latestLog: WorkflowStatus["log"][number] | null; status: WorkflowStatus | null }) {
   if (!status?.isRunning && !latestLog) return null;
   const running = Boolean(status?.isRunning);
+  const latestMessage = latestLog ? compactLogMessage(latestLog.message, 260) : "";
   return (
     <div className={`mt-8 rounded-[8px] border px-5 py-4 ${running ? "border-blue-400/40 bg-blue-950/35" : "border-slate-700 bg-slate-900/55"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className={`text-sm font-bold uppercase tracking-[0.16em] ${running ? "text-blue-200" : "text-slate-400"}`}>{running ? "PIPELINE RUNNING" : "LAST PIPELINE EVENT"}</p>
+          <p className={`text-sm font-bold uppercase tracking-[0.16em] ${running ? "text-blue-200" : "text-slate-400"}`}>{running ? "生产线运行中" : "最近生产线事件"}</p>
           <p className="mt-2 text-lg font-semibold text-white">{status?.currentStep || latestLog?.step || "空闲"}</p>
         </div>
         <div className="text-right text-sm text-slate-300">
@@ -1810,7 +1825,7 @@ function RunBanner({ latestLog, status }: { latestLog: WorkflowStatus["log"][num
           {latestLog ? <p className="mt-1">最近：{formatDate(latestLog.time)}</p> : null}
         </div>
       </div>
-      {latestLog ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{latestLog.message}</p> : null}
+      {latestLog ? <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{latestMessage}</p> : null}
     </div>
   );
 }
@@ -2090,6 +2105,7 @@ function AuditCard({ audit }: { audit: AuditMeta }) {
 
 function LogItem({ item }: { item: { time: string; step: string; message: string } }) {
   const tone = logTone(item);
+  const message = compactLogMessage(item.message, 900);
   return (
     <div className={`rounded-[8px] border p-4 ${tone === "error" ? "border-rose-500/30 bg-rose-950/20" : tone === "success" ? "border-emerald-500/25 bg-emerald-950/15" : "border-slate-800 bg-slate-950"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2097,7 +2113,7 @@ function LogItem({ item }: { item: { time: string; step: string; message: string
         <StatusPill tone={tone === "error" ? "rose" : tone === "success" ? "green" : "slate"}>{tone === "error" ? "异常" : tone === "success" ? "完成" : "事件"}</StatusPill>
       </div>
       <p className="mt-2 font-medium text-white">{item.step}</p>
-      <p className="mt-2 text-sm text-slate-300">{item.message}</p>
+      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{message}</p>
     </div>
   );
 }

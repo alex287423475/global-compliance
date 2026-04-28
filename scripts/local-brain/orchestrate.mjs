@@ -14,6 +14,23 @@ const materialsDir = path.join(localBrainRoot, "materials");
 const factSourcesDir = path.join(localBrainRoot, "inputs", "fact-sources");
 const progressPrefix = "[LOCAL_BRAIN_PROGRESS] ";
 
+const progressLabels = {
+  pipeline_started: "流程已启动",
+  pipeline_completed: "流程已完成",
+  researcher_started: "Researcher 开始整理情报",
+  researcher_completed: "Researcher 完成情报整理",
+  writer_started: "Writer 开始生成文章",
+  writer_completed: "Writer 完成文章草稿",
+  writer_rewrite_started: "Writer 开始重写草稿",
+  writer_rewrite_completed: "Writer 完成重写草稿",
+  reviewer_started: "Reviewer 开始质检",
+  reviewer_completed: "Reviewer 质检通过",
+  reviewer_rejected: "Reviewer 要求重写",
+  reviewer_blocked: "Reviewer 阻断生产",
+  failsafe_started: "Fail-Safe 开始校验",
+  failsafe_completed: "Fail-Safe 校验通过",
+};
+
 function ensureDir(target) {
   fs.mkdirSync(target, { recursive: true });
 }
@@ -160,6 +177,74 @@ function appendLog(step, message) {
   saveStatus(status);
 }
 
+function progressMessage(event) {
+  const label = progressLabels[event?.message_code] || event?.message_code || "进度更新";
+  const agent = event?.agent || "Pipeline";
+  const seed = event?.seed ? ` / ${event.seed}` : "";
+  const slug = event?.data?.slug ? ` / ${event.data.slug}` : "";
+  return `${agent}：${label}${slug}${seed}`;
+}
+
+function summarizeProcessLine(rawLine) {
+  const line = String(rawLine || "").trim();
+  if (!line || line.startsWith(progressPrefix)) return "";
+  if (/^Traceback \(most recent call last\):/u.test(line)) return "Python 运行异常：已记录错误摘要，原始堆栈不再展开到控制台。";
+  if (/^\s*File ".*", line \d+/u.test(line)) return "";
+  if (/^\^+$/u.test(line)) return "";
+  if (/^(main\(\)|state = |return self\.invoke|raise |during task with name)/u.test(line)) return "";
+  if (/^ExceptionGroup:|^ValueError:|^RuntimeError:|^Error:/u.test(line)) return line.slice(0, 360);
+  return line.length > 360 ? `${line.slice(0, 360)}...` : line;
+}
+
+function summarizeCommandFailure(output, code) {
+  const lines = output.join("\n").split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  const meaningful = lines
+    .filter((line) => !line.startsWith(progressPrefix))
+    .filter((line) => !/^Traceback \(most recent call last\):/u.test(line))
+    .filter((line) => !/^\s*File ".*", line \d+/u.test(line))
+    .filter((line) => !/^\^+$/u.test(line))
+    .filter((line) => !/^(main\(\)|state = |return self\.invoke|raise )/u.test(line));
+  const blocked = meaningful.find((line) => /Pipeline blocked|生产线阻断|命令执行失败|LLM .*failed|LLM .*失败|Reviewer blocked/i.test(line));
+  const errorLine = meaningful.reverse().find((line) => /failed|error|exception|blocked|失败|异常|阻断/i.test(line));
+  const summary = blocked || errorLine || `命令执行失败，退出码 ${code ?? "unknown"}`;
+  return summary.length > 420 ? `${summary.slice(0, 420)}...` : summary;
+}
+
+function handleCommandLine(step, rawLine) {
+  const line = String(rawLine || "").trim();
+  if (!line) return;
+  if (line.startsWith(progressPrefix)) {
+    try {
+      const event = JSON.parse(line.slice(progressPrefix.length));
+      appendLog(step, progressMessage(event));
+      const status = loadStatus();
+      status.currentStep = `${step}:${event?.agent || "Pipeline"}`;
+      saveStatus(status);
+    } catch {
+      // Progress lines can be split by the OS pipe. Keep raw JSON out of the UI.
+    }
+    return;
+  }
+  const message = summarizeProcessLine(line);
+  if (message) appendLog(step, message);
+}
+
+function createLineConsumer(step) {
+  let buffer = "";
+  return {
+    push(text) {
+      buffer += text;
+      const lines = buffer.split(/\r?\n/u);
+      buffer = lines.pop() || "";
+      for (const line of lines) handleCommandLine(step, line);
+    },
+    flush() {
+      if (buffer.trim()) handleCommandLine(step, buffer);
+      buffer = "";
+    },
+  };
+}
+
 function setRunning(step) {
   const status = loadStatus();
   status.isRunning = true;
@@ -193,43 +278,28 @@ function runCommand(command, args, step) {
     });
 
     const output = [];
+    const stdout = createLineConsumer(step);
+    const stderr = createLineConsumer(step);
     child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
+      const text = chunk.toString("utf8");
       output.push(text);
-      for (const rawLine of text.split(/\r?\n/u)) {
-        const line = rawLine.trim();
-        if (!line) continue;
-        if (line.startsWith(progressPrefix)) {
-          try {
-            const event = JSON.parse(line.slice(progressPrefix.length));
-            appendLog(step, `${event.agent}: ${event.message_code}`);
-            const status = loadStatus();
-            status.currentStep = `${step}:${event.agent}`;
-            saveStatus(status);
-          } catch {
-            appendLog(step, line);
-          }
-        } else {
-          appendLog(step, line.slice(0, 600));
-        }
-      }
+      stdout.push(text);
     });
 
     child.stderr.on("data", (chunk) => {
-      const text = chunk.toString();
+      const text = chunk.toString("utf8");
       output.push(text);
-      for (const rawLine of text.split(/\r?\n/u)) {
-        const line = rawLine.trim();
-        if (line) appendLog(step, line.slice(0, 600));
-      }
+      stderr.push(text);
     });
 
     child.on("error", reject);
     child.on("close", (code) => {
+      stdout.flush();
+      stderr.flush();
       if (code === 0) {
         resolve(output.join("\n"));
       } else {
-        reject(new Error(output.join("\n") || `${command} failed with exit code ${code}`));
+        reject(new Error(summarizeCommandFailure(output, code)));
       }
     });
   });
@@ -457,43 +527,43 @@ async function main() {
   if (!request) throw new Error("Invalid request payload");
 
   setRunning(request.action);
-  appendLog(request.action, `Task enqueued: ${request.action}`);
+  appendLog(request.action, `任务已入队：${request.action}`);
 
   try {
     if (request.action === "generate") {
       await runGenerate(request);
       await runCommand(process.execPath, ["scripts/local-brain/refresh-images.mjs"], "images");
-      finish("generate", true, "Draft generation completed");
+      finish("generate", true, "文章生成与配图刷新已完成");
       return;
     }
     if (request.action === "review") {
       await runReview(request);
-      finish("review", true, "AI review completed");
+      finish("review", true, "AI 质检已完成");
       return;
     }
     if (request.action === "images" || request.action === "visuals") {
       await runImages(request);
-      finish(request.action, true, "Image refresh completed");
+      finish(request.action, true, "配图刷新已完成");
       return;
     }
     if (request.action === "approve") {
       await runApprove(request);
-      finish("approve", true, "Manual approval completed");
+      finish("approve", true, "人工审核已完成");
       return;
     }
     if (request.action === "rewrite") {
       await runRewrite(request);
-      finish("rewrite", true, "AI rewrite completed");
+      finish("rewrite", true, "AI 重写已完成");
       return;
     }
     if (request.action === "validate") {
       await runValidate(request);
-      finish("validate", true, "Draft validation completed");
+      finish("validate", true, "草稿校验已完成");
       return;
     }
     if (request.action === "publish") {
       await runPublish(request);
-      finish("publish", true, "Publish flow completed");
+      finish("publish", true, "发布流程已完成");
       return;
     }
     throw new Error(`Unsupported action: ${request.action}`);
