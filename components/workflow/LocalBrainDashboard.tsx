@@ -7,6 +7,7 @@ type NavId = "overview" | "models" | "prompts" | "keyword-mining" | "seed-files"
 type WorkflowAction = "generate" | "images" | "visuals" | "review" | "rewrite" | "validate" | "approve" | "publish";
 type MiningTab = "api" | "manual";
 type MiningPlatform = "baidu" | "baidumobile" | "xiaohongshu" | "douyin";
+type DraftFilter = "all" | "draft" | "needs-review" | "approved" | "published";
 
 type AiConfig = {
   role: AiRole;
@@ -231,6 +232,14 @@ const defaultKeywordOptions: KeywordOptions = {
 
 const defaultSeeds = ["Amazon POA 申诉信", "Stripe PayPal 拒付抗辩", "独立站合规政策"].join("\n");
 
+const draftFilters: Array<{ id: DraftFilter; label: string }> = [
+  { id: "all", label: "全部" },
+  { id: "draft", label: "未发布" },
+  { id: "needs-review", label: "待质检/待重写" },
+  { id: "approved", label: "已审核" },
+  { id: "published", label: "已发布" },
+];
+
 function splitMultiValue(value: string) {
   return value
     .split(/[、,，;；|]/u)
@@ -240,6 +249,18 @@ function splitMultiValue(value: string) {
 
 function mergeKeywordOptions(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function providerLabel(provider: string) {
+  return providerDefaults[provider]?.label || provider || "未知提供商";
+}
+
+function matchesDraftFilter(draft: DraftMeta, audit: AuditMeta | undefined, filter: DraftFilter) {
+  if (filter === "all") return true;
+  if (filter === "published") return draft.published;
+  if (filter === "approved") return Boolean(audit?.approved) && !draft.published;
+  if (filter === "needs-review") return !draft.published && (!audit || !audit.reviewPassed);
+  return !draft.published;
 }
 
 function defaultConfig(role: AiRole): AiConfig {
@@ -299,6 +320,7 @@ export function LocalBrainDashboard() {
   const [keywordOptionBusy, setKeywordOptionBusy] = useState<string | null>(null);
   const [selectedKeywords, setSelectedKeywords] = useState<Record<string, boolean>>({});
   const [selectedDrafts, setSelectedDrafts] = useState<Record<string, boolean>>({});
+  const [draftFilter, setDraftFilter] = useState<DraftFilter>("all");
   const [confirmPublish, setConfirmPublish] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [noPush, setNoPush] = useState(false);
@@ -399,6 +421,7 @@ export function LocalBrainDashboard() {
   const pendingDrafts = useMemo(() => drafts.filter((draft) => !draft.published), [drafts]);
   const selectedDraftRows = useMemo(() => drafts.filter((draft) => selectedDrafts[draft.slug]), [drafts, selectedDrafts]);
   const selectedDraftSlugs = selectedDraftRows.map((draft) => draft.slug);
+  const visibleDrafts = useMemo(() => drafts.filter((draft) => matchesDraftFilter(draft, auditsBySlug.get(draft.slug), draftFilter)), [auditsBySlug, draftFilter, drafts]);
   const selectedKeywordRows = keywordRows.filter((row) => selectedKeywords[row.slug]);
   const pendingKeywordRows = keywordRows.filter((row) => !row.generated);
   const selectedCandidateRows = candidateRows.filter((row) => selectedCandidates[row.id]);
@@ -415,6 +438,17 @@ export function LocalBrainDashboard() {
   const allKeywordSelected = keywordRows.length > 0 && keywordRows.every((row) => selectedKeywords[row.slug]);
   const metrics = status?.metrics;
   const configuredModels = Object.values(config).filter((item) => item.api_key_set).length;
+  const latestLog = status?.log?.[status.log.length - 1] || null;
+  const readinessItems = useMemo(
+    () => [
+      { label: "模型 A：文章生成", ok: config.modelA.api_key_set, detail: config.modelA.api_key_set ? `${providerLabel(config.modelA.provider)} / ${config.modelA.model}` : "未配置 API Key" },
+      { label: "模型 B：质检与重写", ok: config.modelB.api_key_set, detail: config.modelB.api_key_set ? `${providerLabel(config.modelB.provider)} / ${config.modelB.model}` : "未配置 API Key" },
+      { label: "关键词文件", ok: keywordRows.length > 0 || seedRows.length > 0, detail: keywordRows.length > 0 ? `${keywordRows.length} 个结构化关键词` : `${seedRows.length} 个临时种子词` },
+      { label: "草稿池", ok: drafts.length > 0, detail: drafts.length > 0 ? `${drafts.length} 篇草稿，${pendingDrafts.length} 篇未发布` : "暂无草稿" },
+      { label: "发布闸门", ok: audits.some((item) => item.approved), detail: audits.some((item) => item.approved) ? `${audits.filter((item) => item.approved).length} 篇已审核` : "发布前需先完成 AI 质检与人工审核" },
+    ],
+    [audits, config, drafts.length, keywordRows.length, pendingDrafts.length, seedRows.length],
+  );
 
   const navBadges: Record<NavId, number> = {
     overview: metrics?.articleCount || drafts.length,
@@ -1089,6 +1123,28 @@ export function LocalBrainDashboard() {
           <InfoTile label="当前步骤" value={status?.currentStep || "空闲"} />
           <InfoTile label="运行锁" value={status?.lock ? `${status.lock.step} / PID ${status.lock.pid || "-"}` : "无"} />
         </div>
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+          <div className="rounded-[8px] border border-slate-700 bg-slate-900/45 p-5">
+            <h3 className="text-lg font-semibold text-white">生产线就绪检查</h3>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {readinessItems.map((item) => (
+                <ReadinessItem key={item.label} {...item} />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-[8px] border border-slate-700 bg-slate-900/45 p-5">
+            <h3 className="text-lg font-semibold text-white">最近事件</h3>
+            {latestLog ? (
+              <div className="mt-4 rounded-[8px] bg-slate-950 p-4">
+                <p className="text-xs text-slate-500">{formatDate(latestLog.time)}</p>
+                <p className="mt-2 font-semibold text-white">{latestLog.step}</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{latestLog.message}</p>
+              </div>
+            ) : (
+              <Empty text="暂无运行事件。" />
+            )}
+          </div>
+        </div>
       </Panel>
     ),
     models: (
@@ -1336,11 +1392,26 @@ export function LocalBrainDashboard() {
               </div>
               <GhostButton label={allDraftsSelected ? "取消选择" : "选择全部草稿"} onClick={toggleAllDrafts} />
             </div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-slate-700 bg-slate-950/45 p-3">
+              <div className="flex flex-wrap gap-2">
+                {draftFilters.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${draftFilter === item.id ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                    onClick={() => setDraftFilter(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm text-slate-400">当前显示：{visibleDrafts.length} 篇；已选择：{selectedDraftRows.length} 篇</p>
+            </div>
             <div className="space-y-3">
-              {drafts.length === 0 ? (
+              {visibleDrafts.length === 0 ? (
                 <Empty text="暂无草稿。" />
               ) : (
-                drafts.map((draft) => (
+                visibleDrafts.map((draft) => (
                   <DraftCard
                     key={draft.slug}
                     audit={auditsBySlug.get(draft.slug)}
@@ -1376,6 +1447,9 @@ export function LocalBrainDashboard() {
                 <p className="mt-2">全部草稿：{drafts.length}</p>
                 <p className="mt-2">未发布草稿：{pendingDrafts.length}</p>
                 <p className="mt-2">已审核草稿：{audits.filter((item) => item.approved).length}</p>
+              </div>
+              <div className="mt-4 rounded-[8px] border border-amber-500/25 bg-amber-950/20 p-4 text-sm leading-6 text-amber-100">
+                发布只处理“已审核通过”的草稿。若文章已发布，仍可查看编辑、重新生成修订稿、刷新配图、再次校验并重新发布。
               </div>
             </div>
             <div className="rounded-[8px] border border-slate-700 bg-slate-900/60 p-5">
@@ -1419,6 +1493,8 @@ export function LocalBrainDashboard() {
           </div>
           <StatusPill tone={status?.isRunning ? "green" : "slate"}>{status?.isRunning ? "运行中" : "空闲"}</StatusPill>
         </div>
+
+        <RunBanner status={status} latestLog={latestLog} />
 
         {error ? <Notice tone="error">{error}</Notice> : null}
         {message ? <Notice tone="success">{message}</Notice> : null}
@@ -1655,8 +1731,42 @@ function StatusPill({ children, tone }: { children: ReactNode; tone: "green" | "
   return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${className}`}>{children}</span>;
 }
 
+function RunBanner({ latestLog, status }: { latestLog: WorkflowStatus["log"][number] | null; status: WorkflowStatus | null }) {
+  if (!status?.isRunning && !latestLog) return null;
+  const running = Boolean(status?.isRunning);
+  return (
+    <div className={`mt-8 rounded-[8px] border px-5 py-4 ${running ? "border-blue-400/40 bg-blue-950/35" : "border-slate-700 bg-slate-900/55"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className={`text-sm font-bold uppercase tracking-[0.16em] ${running ? "text-blue-200" : "text-slate-400"}`}>{running ? "PIPELINE RUNNING" : "LAST PIPELINE EVENT"}</p>
+          <p className="mt-2 text-lg font-semibold text-white">{status?.currentStep || latestLog?.step || "空闲"}</p>
+        </div>
+        <div className="text-right text-sm text-slate-300">
+          {status?.lock ? <p>锁定：{status.lock.step} / PID {status.lock.pid || "-"}</p> : <p>运行锁：无</p>}
+          {latestLog ? <p className="mt-1">最近：{formatDate(latestLog.time)}</p> : null}
+        </div>
+      </div>
+      {latestLog ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{latestLog.message}</p> : null}
+    </div>
+  );
+}
+
+function ReadinessItem({ detail, label, ok }: { detail: string; label: string; ok: boolean }) {
+  return (
+    <div className={`rounded-[8px] border p-4 ${ok ? "border-emerald-500/25 bg-emerald-950/15" : "border-amber-500/25 bg-amber-950/15"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold text-white">{label}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-400">{detail}</p>
+        </div>
+        <StatusPill tone={ok ? "green" : "slate"}>{ok ? "就绪" : "待处理"}</StatusPill>
+      </div>
+    </div>
+  );
+}
+
 function Notice({ children, tone }: { children: ReactNode; tone: "success" | "error" }) {
-  return <div className={`mt-6 rounded-[8px] border px-4 py-3 text-sm ${tone === "success" ? "border-emerald-500/30 bg-emerald-950/30 text-emerald-100" : "border-rose-500/30 bg-rose-950/30 text-rose-100"}`}>{children}</div>;
+  return <div className={`mt-6 whitespace-pre-wrap rounded-[8px] border px-4 py-3 text-sm leading-6 ${tone === "success" ? "border-emerald-500/30 bg-emerald-950/30 text-emerald-100" : "border-rose-500/30 bg-rose-950/30 text-rose-100"}`}>{children}</div>;
 }
 
 function NumberField({ label, onChange, value }: { label: string; onChange: (value: number) => void; value: number }) {
