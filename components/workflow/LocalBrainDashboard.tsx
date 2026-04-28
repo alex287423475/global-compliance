@@ -298,6 +298,7 @@ export function LocalBrainDashboard() {
   const [promptDraft, setPromptDraft] = useState("");
   const activePromptKeyRef = useRef("generate-system");
   const promptDraftRef = useRef("");
+  const configDirtyRolesRef = useRef<Set<AiRole>>(new Set());
   const [seedText, setSeedText] = useState(defaultSeeds);
   const [notes, setNotes] = useState("");
   const [overwrite, setOverwrite] = useState(false);
@@ -354,7 +355,11 @@ export function LocalBrainDashboard() {
     setStatus(nextStatus);
     setDrafts(nextDrafts.drafts || []);
     setConfig(nextConfig);
-    setConfigForms(nextConfig);
+    setConfigForms((current) => ({
+      modelA: configDirtyRolesRef.current.has("modelA") ? current.modelA : nextConfig.modelA,
+      modelB: configDirtyRolesRef.current.has("modelB") ? current.modelB : nextConfig.modelB,
+      modelC: configDirtyRolesRef.current.has("modelC") ? current.modelC : nextConfig.modelC,
+    }));
     setPrompts(nextPrompts.prompts || []);
     setMiningConfig({ ...defaultMiningConfig, ...nextMining, apiKey: "", apiKeySet: nextMining.apiKeySet, apiKeyMasked: nextMining.apiKeyMasked });
     setKeywordRows(nextKeywords.rows || []);
@@ -547,13 +552,14 @@ export function LocalBrainDashboard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role, provider: form.provider, base_url: form.base_url, model: form.model, api_key: apiKeys[role] }),
         },
-        "Config save failed",
+        "模型配置保存失败",
       );
       setApiKeys((current) => ({ ...current, [role]: "" }));
-      setMessage(`${form.label} saved`);
+      configDirtyRolesRef.current.delete(role);
+      setMessage(`${form.label} 已保存`);
       await refresh();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Config save failed");
+      setError(nextError instanceof Error ? nextError.message : "模型配置保存失败");
     } finally {
       setBusy(null);
     }
@@ -571,12 +577,12 @@ export function LocalBrainDashboard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role, provider: form.provider, base_url: form.base_url, model: form.model, api_key: apiKeys[role] }),
         },
-        "Model test failed",
+        "模型测试失败",
       )) as AiTestResult;
       setTestResults((current) => ({ ...current, [role]: payload }));
-      setMessage(payload.message || "Model test passed");
+      setMessage(payload.message || "模型测试通过");
     } catch (nextError) {
-      const text = nextError instanceof Error ? nextError.message : "Model test failed";
+      const text = nextError instanceof Error ? nextError.message : "模型测试失败";
       setTestResults((current) => ({ ...current, [role]: { success: false, message: text } }));
       setError(text);
     } finally {
@@ -1103,6 +1109,7 @@ export function LocalBrainDashboard() {
   }
 
   function updateConfig(role: AiRole, patch: Partial<AiConfig>) {
+    configDirtyRolesRef.current.add(role);
     setConfigForms((current) => ({ ...current, [role]: { ...current[role], ...patch } }));
   }
 
