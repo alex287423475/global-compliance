@@ -31,6 +31,19 @@ function Invoke-Checked {
   }
 }
 
+function Push-WithFallback {
+  & git push
+  if ($LASTEXITCODE -eq 0) {
+    return
+  }
+
+  Write-Host "Default git push failed. Retrying with OpenSSL backend..." -ForegroundColor Yellow
+  & git -c http.sslBackend=openssl push
+  if ($LASTEXITCODE -ne 0) {
+    throw "git push failed after OpenSSL retry"
+  }
+}
+
 function Get-GitStatusPath {
   param([string]$Line)
 
@@ -124,7 +137,7 @@ if ($NoPush) {
 }
 
 Invoke-Checked "Pushing to GitHub" {
-  & git push
+  Push-WithFallback
 }
 
 Write-Step "Done"

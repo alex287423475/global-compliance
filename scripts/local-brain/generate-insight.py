@@ -25,6 +25,7 @@ except Exception:
     LANGGRAPH_AVAILABLE = False
 
 
+ROOT = Path.cwd()
 ALLOWED_CATEGORIES = {
     "Payment Risk",
     "Marketplace Appeal",
@@ -41,6 +42,51 @@ ALLOWED_CATEGORIES = {
 ALLOWED_RISK_LEVELS = {"Critical", "High", "Medium"}
 MAX_REVISIONS = 3
 PROGRESS_PREFIX = "[LOCAL_BRAIN_PROGRESS] "
+
+CATEGORY_ALIASES = {
+    "支付风控": "Payment Risk",
+    "支付网关": "Payment Risk",
+    "拒付": "Payment Risk",
+    "冻结": "Payment Risk",
+    "平台申诉": "Marketplace Appeal",
+    "亚马逊申诉": "Marketplace Appeal",
+    "poa": "Marketplace Appeal",
+    "市场准入": "Market Entry",
+    "fda": "Market Entry",
+    "ce": "Market Entry",
+    "供应链合规": "Supply Chain",
+    "供应链": "Supply Chain",
+    "溯源": "Supply Chain",
+    "知识产权攻防": "IP Defense",
+    "知识产权": "IP Defense",
+    "版权": "IP Defense",
+    "危机公关": "Crisis PR",
+    "舆情": "Crisis PR",
+    "资本运作": "Capital Documents",
+    "融资": "Capital Documents",
+    "ipo": "Capital Documents",
+    "b2b 合规": "B2B Contracts",
+    "合同": "B2B Contracts",
+    "税务": "Tax & Audit",
+    "审计": "Tax & Audit",
+    "隐私与数据合规": "Data Privacy",
+    "隐私": "Data Privacy",
+    "数据合规": "Data Privacy",
+    "seo 资产": "Payment Risk",
+}
+
+CATEGORY_PROFILE_HINTS = {
+    "Payment Risk": "payment-gateway-review",
+    "Marketplace Appeal": "amazon-marketplace",
+    "Market Entry": "payment-gateway-review",
+    "Supply Chain": "supply-chain",
+    "IP Defense": "amazon-marketplace",
+    "Crisis PR": "payment-gateway-review",
+    "Capital Documents": "payment-gateway-review",
+    "B2B Contracts": "supply-chain",
+    "Tax & Audit": "payment-gateway-review",
+    "Data Privacy": "payment-gateway-review",
+}
 
 FORBIDDEN_REPLACEMENTS = {
     "100% safe": "evidence-backed",
@@ -79,6 +125,11 @@ class PipelineError(Exception):
 
 class WorkflowState(TypedDict, total=False):
     seed: str
+    slug_override: str
+    content_mode: str
+    locale: str
+    keyword_category: str
+    keyword_intent: str
     notes: str
     profiles: Dict[str, Any]
     forbidden_terms: Dict[str, Any]
@@ -108,6 +159,14 @@ class WorkflowState(TypedDict, total=False):
 def load_json(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def read_prompt_file(file_name: str, fallback: str) -> str:
+    path = ROOT / "local-brain" / "prompts" / file_name
+    if not path.exists():
+        return fallback
+    text = path.read_text(encoding="utf-8").strip()
+    return text or fallback
 
 
 def load_env_file(path: Path) -> None:
@@ -228,6 +287,100 @@ def section_markdown(heading: str, body: str) -> str:
     return "## %s\n\n%s" % (heading.strip(), body.strip())
 
 
+def fact_source_blocks(article: Dict[str, Any], state: WorkflowState, locale: str) -> str:
+    if article.get("contentMode") != "fact-source":
+        return ""
+    evidence_items = [first_string(item) for item in state.get("evidence", [])[:6] if first_string(item)]
+    if not evidence_items:
+        evidence_items = ["platform notice", "source file", "order record", "support log", "policy screenshot"]
+    redlines = [first_string(item) for item in article.get("redlineTerms", [])[:4] if first_string(item)]
+    if not redlines:
+        redlines = ["guaranteed approval", "we did nothing wrong", "no chargeback risk"]
+
+    if locale == "zh":
+        scenario = [
+            "## 核心结论",
+            "",
+            "这是一篇事实源型文章。它应当先回答搜索意图，再把判断边界、证据资料包和人工确认点拆开，避免把未经确认的事实写成确定性结论。",
+            "",
+            "## 适用场景 / 不适用场景",
+            "",
+            "| 场景 | 是否适用 | 判断标准 |",
+            "| --- | --- | --- |",
+            "| 已收到平台通知、支付审核或客户争议 | 适用 | 可以围绕通知、订单、截图和沟通记录重构证据语境 |",
+            "| 只是想写营销型介绍页 | 不适用 | 应改用 standard 模式，避免把事实源文章写成泛营销页 |",
+            "| 需要提交正式申诉或政策解释 | 适用 | 必须由人工确认事实时间线和材料真实性 |",
+            "",
+            "## Before / After 修正表",
+            "",
+            "| 高风险表达 | 可能被如何理解 | 建议替代表达 |",
+            "| --- | --- | --- |",
+        ]
+        for term in redlines[:3]:
+            scenario.append("| %s | 缺乏证据边界或带有不可控结果承诺 | 以已确认事实、流程改进和证据资料说明替代 |" % term)
+        scenario.extend(
+            [
+                "",
+                "## 证据资料包",
+                "",
+                "\n".join("- %s" % item for item in evidence_items),
+                "",
+                "## 人工确认边界",
+                "",
+                "涉及具体账号通知、订单事实、供应商材料、客户沟通记录和最终提交版本时，必须由人工复核。系统可以辅助重构表达，但不能替代事实确认。",
+            ]
+        )
+        return "\n".join(scenario)
+
+    scenario = [
+        "## Core Conclusion",
+        "",
+        "This is a fact-source article. It should answer the search intent first, then separate the scenario boundary, evidence package, and human-confirmation boundary so unverified facts do not become public claims.",
+        "",
+        "## Applicable / Not Applicable Scenarios",
+        "",
+        "| Scenario | Fit | Decision Standard |",
+        "| --- | --- | --- |",
+        "| A platform notice, payment review, or customer dispute already exists | Applicable | The article can rebuild the evidence context around notices, orders, screenshots, and communication records |",
+        "| The page is only a broad marketing introduction | Not applicable | Use standard mode instead of treating a fact-source page as a generic sales page |",
+        "| A formal appeal or policy explanation will be submitted | Applicable | The factual timeline and material authenticity must be manually confirmed |",
+        "",
+        "## Before / After Correction Table",
+        "",
+        "| Risky Expression | Possible Reviewer Reading | Safer Replacement |",
+        "| --- | --- | --- |",
+    ]
+    for term in redlines[:3]:
+        scenario.append("| %s | The statement may imply an uncontrolled outcome or unsupported certainty | Replace it with confirmed facts, process changes, and evidence-backed language |" % term)
+    scenario.extend(
+        [
+            "",
+            "## Evidence Package",
+            "",
+            "\n".join("- %s" % item for item in evidence_items),
+            "",
+            "## Human Confirmation Boundary",
+            "",
+            "Account-specific notices, order facts, supplier records, customer communications, and final submission wording require human confirmation. The system can help structure language, but it cannot verify facts that are not present in the source files.",
+        ]
+    )
+    return "\n".join(scenario)
+
+
+def count_markdown_tables(markdown: str) -> int:
+    return len(re.findall(r"(?:^\|.+\|\s*$\n?)+", first_string(markdown), flags=re.MULTILINE))
+
+
+def needs_fact_source_blocks(markdown: str) -> bool:
+    body = first_string(markdown)
+    return (
+        count_markdown_tables(body) < 2
+        or not re.search(r"core conclusion|核心结论|结论", body, flags=re.IGNORECASE)
+        or not re.search(r"evidence|证据|资料包|source file", body, flags=re.IGNORECASE)
+        or not re.search(r"human|人工|manual confirmation|人工确认", body, flags=re.IGNORECASE)
+    )
+
+
 def build_markdown_article(
     article: Dict[str, Any],
     state: WorkflowState,
@@ -254,6 +407,9 @@ def build_markdown_article(
         parts.append(introduction.strip())
     if takeaways:
         parts.append("## Key Takeaways\n\n" + "\n".join("- %s" % first_string(item) for item in takeaways[:5] if first_string(item)))
+    fact_blocks = fact_source_blocks(article, state, locale)
+    if fact_blocks:
+        parts.append(fact_blocks)
     cards = article.get("intelligenceCards", [])
     if isinstance(cards, list) and cards:
         if locale == "en":
@@ -321,6 +477,34 @@ def build_markdown_article(
     return markdown.strip()
 
 
+def strip_warning_sections(text: str) -> str:
+    cleaned = first_string(text)
+    cleaned = re.sub(
+        r"\n##\s*(Redline Watchlist|红线词|红线清单|警戒词)[\s\S]*?(?=\n##\s+|\Z)",
+        "\n",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return cleaned
+
+
+def public_facing_text(article: Dict[str, Any]) -> str:
+    clone = dict(article)
+    clone["bodyMarkdown"] = strip_warning_sections(first_string(article.get("bodyMarkdown")))
+    clone["zhBodyMarkdown"] = strip_warning_sections(first_string(article.get("zhBodyMarkdown")))
+    clone["relatedKeywords"] = []
+    return publishable_text(clone)
+
+
+def public_strict_terms(article: Dict[str, Any], strict_terms: List[str]) -> List[str]:
+    redlines = {
+        first_string(item).strip().lower()
+        for item in article.get("redlineTerms", [])
+        if first_string(item).strip()
+    }
+    return [term for term in strict_terms if first_string(term).strip().lower() not in redlines]
+
+
 def sanitize_article_claims(value: Any) -> Any:
     if isinstance(value, str):
         return sanitize_claim_text(value)
@@ -346,24 +530,75 @@ def first_string(value: Any, fallback: str = "") -> str:
     return str(value)
 
 
+def normalize_keyword_category(value: Any, fallback: str = "Payment Risk") -> str:
+    raw = first_string(value).strip()
+    if raw in ALLOWED_CATEGORIES:
+        return raw
+    parts = [part.strip() for part in re.split(r"[、,，;；|/]+", raw) if part.strip()]
+    for part in parts or [raw]:
+        if part in ALLOWED_CATEGORIES:
+            return part
+        lowered = part.lower()
+        for source, target in CATEGORY_ALIASES.items():
+            if source.lower() in lowered:
+                return target
+    return fallback if fallback in ALLOWED_CATEGORIES else "Payment Risk"
+
+
+def mode_contract(content_mode: str) -> Dict[str, Any]:
+    if content_mode == "fact-source":
+        return {
+            "mode": "fact-source",
+            "purpose": "evidence-backed fact-source article for disputes, policies, appeals, and high-risk compliance topics",
+            "must_include": [
+                "core conclusion near the opening",
+                "applicable / not applicable scenario boundary",
+                "Before / After correction table",
+                "evidence package or source-file checklist",
+                "human confirmation boundary",
+                "at least two markdown tables",
+            ],
+            "must_not_do": [
+                "invent legal clauses, statistics, platform policy dates, or regulator details",
+                "claim that source files prove facts not present in the provided material",
+            ],
+        }
+    return {
+        "mode": "standard",
+        "purpose": "evergreen SEO long-form article with embedded intelligence-card structure",
+        "must_include": [
+            "direct answer to search intent",
+            "risk explanation tied to operations and evidence",
+            "one markdown table",
+            "FAQ",
+            "natural diagnostic-review CTA",
+        ],
+        "must_not_do": ["write a thin checklist, internal memo, or generic marketing page"],
+    }
+
+
 def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str, Any]:
     normalized = dict(article)
     profile = state.get("profile", {})
     seed = state.get("seed", "compliance asset")
+    content_mode = "fact-source" if state.get("content_mode") == "fact-source" else "standard"
+    slug_override = first_string(state.get("slug_override"))
 
-    normalized["slug"] = slugify(first_string(normalized.get("slug")) or seed + " compliance article")
+    normalized["slug"] = slugify(slug_override or first_string(normalized.get("slug")) or seed + " compliance article")
     normalized["title"] = articleize_text(
         first_string(normalized.get("title"), "%s cross-border compliance article" % title_case_seed(seed))
     )
     normalized["zhTitle"] = first_string(normalized.get("zhTitle"), normalized["title"])
-    normalized["category"] = first_string(normalized.get("category"), profile.get("category", "Payment Risk"))
-    if normalized["category"] not in ALLOWED_CATEGORIES:
-        normalized["category"] = profile.get("category", "Payment Risk")
+    normalized["category"] = normalize_keyword_category(
+        state.get("keyword_category") or normalized.get("category"),
+        profile.get("category", "Payment Risk"),
+    )
     normalized["market"] = first_string(normalized.get("market"), profile.get("market", "North America"))
     normalized["riskLevel"] = first_string(normalized.get("riskLevel"), profile.get("risk_level", "High"))
     if normalized["riskLevel"] not in ALLOWED_RISK_LEVELS:
         normalized["riskLevel"] = profile.get("risk_level", "High")
     normalized["updatedAt"] = dt.date.today().isoformat()
+    normalized["contentMode"] = content_mode
 
     normalized["metaTitle"] = first_string(normalized.get("metaTitle"), normalized["title"])[:80]
     normalized["metaDescription"] = articleize_text(
@@ -446,16 +681,31 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
             severity = first_string(item.get("severity"), normalized["riskLevel"])
             if severity not in {"Critical", "High", "Medium", "Watch"}:
                 severity = normalized["riskLevel"] if normalized["riskLevel"] in {"Critical", "High", "Medium"} else "Watch"
+            if len(finding) < 60:
+                finding = "%s This signal should be interpreted against the actual notice, policy page, order record, and support history before publication." % finding
+            if len(evidence) < 40:
+                evidence = "%s; confirm the source file, screenshot, timestamp, and operator record before use." % evidence
+            if len(action) < 40:
+                action = "%s; convert the finding into a documented wording change, evidence checklist, and human review item." % action
+            zh_finding = first_string(item.get("zhFinding"), finding)
+            zh_evidence = first_string(item.get("zhEvidence"), evidence)
+            zh_action = first_string(item.get("zhAction"), action)
+            if len(zh_finding) < 30:
+                zh_finding = "%s。发布前应结合具体通知、政策页面、订单记录和客服记录确认。" % zh_finding
+            if len(zh_evidence) < 20:
+                zh_evidence = "%s；需核对源文件、截图、时间戳和运营记录。" % zh_evidence
+            if len(zh_action) < 20:
+                zh_action = "%s；应转化为措辞修正、证据清单和人工复核项。" % zh_action
             cleaned_cards.append(
                 {
                     "label": first_string(item.get("label"), "Risk Signal"),
                     "zhLabel": first_string(item.get("zhLabel"), first_string(item.get("label"), "Risk Signal")),
                     "finding": finding,
-                    "zhFinding": first_string(item.get("zhFinding"), finding),
+                    "zhFinding": zh_finding,
                     "evidence": evidence,
-                    "zhEvidence": first_string(item.get("zhEvidence"), evidence),
+                    "zhEvidence": zh_evidence,
                     "action": action,
-                    "zhAction": first_string(item.get("zhAction"), action),
+                    "zhAction": zh_action,
                     "severity": severity,
                 }
             )
@@ -526,6 +776,17 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     if len(cleaned_sections) < 4:
         fallback = build_fallback_article(state, seed, state.get("revision_count", 0))
         cleaned_sections = fallback["sections"]
+    else:
+        fallback_sections = build_fallback_article(state, seed, state.get("revision_count", 0))["sections"]
+        for index, section in enumerate(cleaned_sections):
+            body = first_string(section.get("body"))
+            if len(body) < 280 or "\n\n" not in body:
+                fallback_body = first_string(fallback_sections[min(index, len(fallback_sections) - 1)].get("body"))
+                section["body"] = paragraphize("%s\n\n%s" % (body, fallback_body))
+            zh_body = first_string(section.get("zhBody"))
+            if len(zh_body) < 140 or "\n\n" not in zh_body:
+                fallback_zh_body = first_string(fallback_sections[min(index, len(fallback_sections) - 1)].get("zhBody"))
+                section["zhBody"] = paragraphize("%s\n\n%s" % (zh_body, fallback_zh_body))
     normalized["sections"] = cleaned_sections
 
     normalized["conclusion"] = paragraphize(
@@ -592,11 +853,23 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     normalized["faq"] = cleaned_faq
 
     normalized["bodyMarkdown"] = first_string(normalized.get("bodyMarkdown"))
+    min_markdown_length = 5200 if content_mode == "fact-source" else 4200
     if not normalized["bodyMarkdown"]:
         normalized["bodyMarkdown"] = build_markdown_article(normalized, state, "en")
+    elif len(normalized["bodyMarkdown"]) < min_markdown_length:
+        supplement = build_markdown_article(build_fallback_article(state, seed, state.get("revision_count", 0)), state, "en")
+        normalized["bodyMarkdown"] = (normalized["bodyMarkdown"].strip() + "\n\n---\n\n" + supplement).strip()
+    if content_mode == "fact-source" and needs_fact_source_blocks(normalized["bodyMarkdown"]):
+        normalized["bodyMarkdown"] = (fact_source_blocks(normalized, state, "en") + "\n\n---\n\n" + normalized["bodyMarkdown"].strip()).strip()
     normalized["zhBodyMarkdown"] = first_string(normalized.get("zhBodyMarkdown"))
+    min_zh_markdown_length = 2600 if content_mode == "fact-source" else 2200
     if not normalized["zhBodyMarkdown"]:
         normalized["zhBodyMarkdown"] = build_markdown_article(normalized, state, "zh")
+    elif len(normalized["zhBodyMarkdown"]) < min_zh_markdown_length:
+        supplement = build_markdown_article(build_fallback_article(state, seed, state.get("revision_count", 0)), state, "zh")
+        normalized["zhBodyMarkdown"] = (normalized["zhBodyMarkdown"].strip() + "\n\n---\n\n" + supplement).strip()
+    if content_mode == "fact-source" and needs_fact_source_blocks(normalized["zhBodyMarkdown"]):
+        normalized["zhBodyMarkdown"] = (fact_source_blocks(normalized, state, "zh") + "\n\n---\n\n" + normalized["zhBodyMarkdown"].strip()).strip()
 
     toc = normalized.get("toc", [])
     if not isinstance(toc, list):
@@ -710,6 +983,7 @@ class OpenAICompatibleClient:
         payload = {
             "model": self.model,
             "temperature": temperature,
+            "max_tokens": 4096,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -750,12 +1024,18 @@ class OpenAICompatibleClient:
         return parse_json_object(content)
 
 
-def select_profile(seed: str, profiles: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+def select_profile(seed: str, profiles: Dict[str, Any], category_hint: str = "") -> Tuple[str, Dict[str, Any]]:
     lowered = seed.lower()
+    canonical_category = normalize_keyword_category(category_hint, "")
+    preferred_profile = CATEGORY_PROFILE_HINTS.get(canonical_category, "")
     best_key = None
     best_score = -1
     for key, profile in profiles.items():
         score = 0
+        if preferred_profile and key == preferred_profile:
+            score += 4
+        if canonical_category and profile.get("category") == canonical_category:
+            score += 3
         for term in profile.get("match_terms", []):
             if term.lower() in lowered:
                 score += 1
@@ -772,10 +1052,19 @@ def tokenize(text: str) -> List[str]:
 
 
 def read_textish_file(path: Path) -> str:
+    raw = path.read_bytes()
+    for encoding in ("utf-8", "utf-8-sig", "gb18030", "gbk"):
+        try:
+            decoded = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            decoded = ""
+    if not decoded:
+        decoded = raw.decode("utf-8", errors="ignore")
     if path.suffix.lower() == ".json":
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(decoded)
         return json.dumps(data, ensure_ascii=False, indent=2)
-    return path.read_text(encoding="utf-8", errors="ignore")
+    return decoded
 
 
 def retrieve_snippets(seed: str, directory: Path, limit: int = 5) -> List[Dict[str, str]]:
@@ -829,7 +1118,7 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
     forbidden_terms = state["forbidden_terms"]
     seed = state["seed"]
     emit_progress(seed, "Researcher Agent", "running", "researcher_started")
-    profile_key, profile = select_profile(seed, profiles)
+    profile_key, profile = select_profile(seed, profiles, first_string(state.get("keyword_category")))
     strict_terms = (
         forbidden_terms.get("global", [])
         + forbidden_terms.get("medical_claims", [])
@@ -862,8 +1151,12 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
             "review_voc": review_snippets,
             "operator_notes": state.get("notes", ""),
         }
-        result = llm.chat_json(
+        research_system_prompt = read_prompt_file(
+            "research-system.md",
             "You are a cross-border trade risk intelligence analyst. Return only JSON with keys: research_data, pain_points, red_lines, safe_terms, evidence. Extract risks from local RAG notes and review VOC. Do not write an article.",
+        )
+        result = llm.chat_json(
+            research_system_prompt,
             json.dumps(prompt, ensure_ascii=False),
             temperature=0.1,
         )
@@ -925,6 +1218,7 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
     rewrite_note = " after reviewer revision" if revision_count > 0 else ""
     return {
         "slug": slug,
+        "contentMode": state.get("content_mode", "standard"),
         "title": "What cross-border sellers should fix before scaling %s%s" % (seed_title, rewrite_note),
         "zhTitle": "%s compliance article" % safe_seed,
         "category": profile.get("category", "Payment Risk"),
@@ -1127,6 +1421,12 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
     if state.get("use_llm") and llm and llm.available:
         payload = {
             "seed_keyword": safe_seed,
+            "content_mode": state.get("content_mode", "standard"),
+            "mode_contract": mode_contract(state.get("content_mode", "standard")),
+            "keyword_locale": state.get("locale", "zh"),
+            "keyword_category": state.get("keyword_category", ""),
+            "canonical_category": normalize_keyword_category(state.get("keyword_category"), state.get("profile", {}).get("category", "Payment Risk")),
+            "keyword_intent": state.get("keyword_intent", ""),
             "research_data": state.get("research_data", ""),
             "pain_points": state.get("pain_points", []),
             "red_lines": state.get("redline_terms", []),
@@ -1135,6 +1435,7 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
             "review_feedback": state.get("review_feedback", ""),
             "required_schema": {
                 "slug": "lowercase-ascii-hyphen-slug",
+                "contentMode": "standard|fact-source",
                 "title": "English title",
                 "zhTitle": "Chinese title",
                 "category": list(ALLOWED_CATEGORIES),
@@ -1151,8 +1452,8 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
                 "zhIntroduction": "Two-paragraph Chinese introduction",
                 "keyTakeaways": ["3-5 English bullets"],
                 "zhKeyTakeaways": ["3-5 Chinese bullets"],
-                "bodyMarkdown": "Long-form markdown article with 5-8 H2/H3 headings, at least 900 English words, lists, and embedded CTA",
-                "zhBodyMarkdown": "Localized markdown article",
+                "bodyMarkdown": "Optional. Prefer an empty string; the local renderer will assemble the final long-form markdown from sections, cards, FAQ, and conclusion.",
+                "zhBodyMarkdown": "Optional. Prefer an empty string; the local renderer will assemble the final localized markdown.",
                 "toc": [{"id": "heading-id", "label": "English heading", "zhLabel": "Chinese heading", "level": 2}],
                 "intelligenceCards": [
                     {
@@ -1175,8 +1476,18 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
                 "zhConclusion": "Two-paragraph Chinese conclusion",
             },
         }
+        writer_prompt_file = "rewrite-system.md" if revision_count > 0 else "insight-agent-prompt.md"
+        writer_system_prompt = read_prompt_file(
+            writer_prompt_file,
+            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. For content_mode=standard, produce an evergreen SEO long-form article. For content_mode=fact-source, produce a stricter evidence-backed fact-source article with core conclusion, scenario boundaries, before-after correction table, evidence package, human-confirmation boundary, and visual-ready structures. Return only JSON matching the required schema.",
+        )
+        writer_system_prompt += (
+            "\n\nRuntime stability rule: keep the JSON compact. Do not generate the full bodyMarkdown or zhBodyMarkdown unless you can finish valid JSON without truncation. "
+            "It is acceptable, and preferred, to set bodyMarkdown and zhBodyMarkdown to empty strings. The local renderer will assemble the final markdown article from the developed sections, intelligenceCards, FAQ, keyTakeaways, introduction, and conclusion. "
+            "Each section body must still contain two developed paragraphs."
+        )
         article = llm.chat_json(
-            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. The output must read like a real website article a buyer would read end to end: headline, SEO metadata, deck, introduction, key takeaways, 5-8 developed H2/H3 sections, FAQ, and conclusion. bodyMarkdown is the primary article body and must be a real long-form markdown article, not section fragments pasted together. Each major section should have 2-4 developed paragraphs. Include one bullet list, one short warning or quote block, at least one markdown table comparing risk signal / evidence / operational response, and one embedded CTA sentence about diagnostic review. Also return 3-6 intelligenceCards. Each intelligence card must summarize one extractable conclusion with finding, evidence, action, and severity so AI answer engines and fast readers can lift the card without losing context. redlineTerms must list forbidden phrases that should stay out of public-facing copy; do not rewrite those warning phrases into euphemisms. Avoid every red line term exactly and semantically in the title, meta description, deck, summary, introduction, markdown body, FAQ answers, and conclusion. For pet devices, do not use medical, veterinary, disease, treatment, cure, anxiety-treatment, prevention, pain-relief, or clinically-proven claims. Use only operational wording such as feeding schedule, portion control, routine support, setup, support logs, policies, and evidence files. Return only JSON matching the required schema.",
+            writer_system_prompt,
             json.dumps(payload, ensure_ascii=False),
             temperature=0.35,
         )
@@ -1244,7 +1555,8 @@ def publishable_text(article: Dict[str, Any]) -> str:
 
 def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
     article = state["article"]
-    findings = contains_any(publishable_text(article), state.get("strict_terms", []))
+    content_mode = article.get("contentMode") or state.get("content_mode", "standard")
+    findings = contains_any(public_facing_text(article), public_strict_terms(article, state.get("strict_terms", [])))
     article_voice_text = "\n".join(
         [article.get("title", ""), article.get("summary", "")]
         + [section.get("heading", "") for section in article.get("sections", [])]
@@ -1283,7 +1595,21 @@ def deterministic_review(state: WorkflowState) -> Tuple[bool, List[str], str]:
         findings.append("not enough markdown headings")
     if not re.search(r"\|[^\n]+\|", first_string(article.get("bodyMarkdown"))):
         findings.append("missing markdown evidence table")
-    if any(term in publishable_text(article).lower() for term in ["best ever", "miracle", "easy money", "100 percent"]):
+    if content_mode == "fact-source":
+        body = first_string(article.get("bodyMarkdown"))
+        if len(body) < 5200:
+            findings.append("fact-source markdown article too short")
+        if len(re.findall(r"^##+\s+.+$", body, flags=re.MULTILINE)) < 6:
+            findings.append("fact-source article needs at least six markdown headings")
+        if count_markdown_tables(body) < 2:
+            findings.append("fact-source article needs at least two markdown tables")
+        if not re.search(r"core conclusion|核心结论|结论", body, flags=re.IGNORECASE):
+            findings.append("fact-source article needs a core conclusion section")
+        if not re.search(r"evidence|证据|资料包|source file", body, flags=re.IGNORECASE):
+            findings.append("fact-source article needs evidence package language")
+        if not re.search(r"human|人工|manual confirmation|人工确认", body, flags=re.IGNORECASE):
+            findings.append("fact-source article needs human confirmation boundary")
+    if any(term in public_facing_text(article).lower() for term in ["best ever", "miracle", "easy money", "100 percent"]):
         findings.append("overpromising marketing tone")
     feedback = "Remove forbidden or overpromising language and rewrite with evidence-bounded claims: %s" % ", ".join(findings)
     return len(findings) == 0, findings, feedback
@@ -1303,8 +1629,12 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
     reviewer_warning = ""
     if state.get("use_llm") and llm and llm.available and passed:
         try:
-            result = llm.chat_json(
+            reviewer_system_prompt = read_prompt_file(
+                "review-system.md",
                 "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. redlineTerms is a warning list and may contain prohibited phrases by design; do not reject the draft solely because the warning list names those phrases. Reject only when forbidden language or equivalent promises appear in the title, summary, or section bodies as public-facing copy. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
+            )
+            result = llm.chat_json(
+                reviewer_system_prompt,
                 json.dumps({"red_lines": state.get("redline_terms", []), "draft": state.get("article", {})}, ensure_ascii=False),
                 temperature=0.0,
             )
@@ -1312,7 +1642,7 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
                 passed = False
                 findings = list(result.get("findings", [])) or ["llm reviewer rejected draft"]
                 feedback = str(result.get("feedback", "Rewrite with tighter compliance language."))
-        except PipelineError as exc:
+        except Exception as exc:
             reviewer_warning = "Remote reviewer unavailable; kept deterministic review result: %s" % exc
             print(reviewer_warning)
 
@@ -1358,6 +1688,7 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
     errors = []
     required = [
         "slug",
+        "contentMode",
         "title",
         "zhTitle",
         "category",
@@ -1390,6 +1721,8 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
             errors.append("missing required field: %s" % field)
     if not re.match(r"^[a-z0-9]+(?:-[a-z0-9]+)*$", article.get("slug", "")):
         errors.append("slug must be lowercase ASCII words separated by hyphens")
+    if article.get("contentMode") not in {"standard", "fact-source"}:
+        errors.append("contentMode must be standard or fact-source")
     if article.get("category") not in ALLOWED_CATEGORIES:
         errors.append("category is not allowed: %s" % article.get("category"))
     if article.get("riskLevel") not in ALLOWED_RISK_LEVELS:
@@ -1445,9 +1778,24 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
         errors.append("bodyMarkdown should contain at least five H2/H3 headings")
     if not re.search(r"\|[^\n]+\|", first_string(article.get("bodyMarkdown"))):
         errors.append("bodyMarkdown should contain at least one markdown table")
+    if article.get("contentMode") == "fact-source":
+        body = first_string(article.get("bodyMarkdown"))
+        table_count = count_markdown_tables(body)
+        if len(body) < 5200:
+            errors.append("fact-source bodyMarkdown is too short for an evidence-backed article")
+        if len(markdown_headings) < 6:
+            errors.append("fact-source bodyMarkdown should contain at least six H2/H3 headings")
+        if table_count < 2:
+            errors.append("fact-source bodyMarkdown should contain at least two markdown tables")
+        if not re.search(r"core conclusion|核心结论|结论", body, flags=re.IGNORECASE):
+            errors.append("fact-source article must include a core conclusion section")
+        if not re.search(r"evidence|证据|资料包|source file", body, flags=re.IGNORECASE):
+            errors.append("fact-source article must name the evidence package or source files")
+        if not re.search(r"human|人工|manual confirmation|人工确认", body, flags=re.IGNORECASE):
+            errors.append("fact-source article must define the human confirmation boundary")
     if len(publishable_text(article)) < 6000:
         errors.append("article is too thin for publication")
-    hits = contains_any(publishable_text(article), strict_terms)
+    hits = contains_any(public_facing_text(article), public_strict_terms(article, strict_terms))
     if hits:
         errors.append("Fail-Safe blocked forbidden claim(s) in publishable text: %s" % ", ".join(hits))
     if errors:
@@ -1479,12 +1827,29 @@ def run_fallback_state_machine(initial_state: WorkflowState) -> WorkflowState:
             return state
 
 
-def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_terms: Dict[str, Any], source_dir: str, reviews_dir: str) -> WorkflowState:
+def run_workflow(
+    seed: str,
+    notes: str,
+    profiles: Dict[str, Any],
+    forbidden_terms: Dict[str, Any],
+    source_dir: str,
+    reviews_dir: str,
+    content_mode: str = "standard",
+    slug_override: str = "",
+    locale: str = "zh",
+    keyword_category: str = "",
+    keyword_intent: str = "",
+) -> WorkflowState:
     llm = OpenAICompatibleClient()
     if not llm.available:
-        raise PipelineError("LLM is required. Configure API Key in Streamlit 5. 配置 or local-brain/config.json before generating articles.")
+        raise PipelineError("LLM is required. Configure API Key in /local-brain or local-brain/config.json before generating articles.")
     initial_state: WorkflowState = {
         "seed": seed,
+        "slug_override": slug_override.strip(),
+        "content_mode": "fact-source" if content_mode == "fact-source" else "standard",
+        "locale": locale.strip() or "zh",
+        "keyword_category": keyword_category.strip(),
+        "keyword_intent": keyword_intent.strip(),
         "notes": notes.strip(),
         "revision_count": 0,
         "trace": [],
@@ -1522,6 +1887,11 @@ def run_workflow(seed: str, notes: str, profiles: Dict[str, Any], forbidden_term
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate a compliance insight draft with a real multi-agent LangGraph workflow.")
     parser.add_argument("--seed", required=True, help="Seed keyword or category, for example: 智能宠物喂食器")
+    parser.add_argument("--slug", default="", help="Optional slug from local-brain/inputs/keywords.csv.")
+    parser.add_argument("--content-mode", choices=["standard", "fact-source"], default="standard", help="Content mode from keywords.csv.")
+    parser.add_argument("--locale", default="zh", help="Keyword locale.")
+    parser.add_argument("--category", default="", help="Keyword category from keywords.csv.")
+    parser.add_argument("--intent", default="", help="Keyword intent from keywords.csv.")
     parser.add_argument("--notes-file", default="", help="Optional local notes file to enrich the intelligence brief.")
     parser.add_argument("--source-dir", default="local-brain/knowledge", help="Local RAG source directory.")
     parser.add_argument("--reviews-dir", default="local-brain/reviews", help="Local VOC/review directory.")
@@ -1548,7 +1918,19 @@ def main():
         raise PipelineError("--no-llm is forbidden. This production line requires LLM-based Researcher / Writer / Reviewer execution.")
 
     emit_progress(args.seed, "Pipeline", "running", "pipeline_started")
-    state = run_workflow(args.seed, notes, profiles, forbidden_terms, args.source_dir, args.reviews_dir)
+    state = run_workflow(
+        args.seed,
+        notes,
+        profiles,
+        forbidden_terms,
+        args.source_dir,
+        args.reviews_dir,
+        args.content_mode,
+        args.slug,
+        args.locale,
+        args.category,
+        args.intent,
+    )
     if state.get("blocked"):
         raise PipelineError("Reviewer blocked the article after %s revision(s): %s" % (state.get("revision_count", 0), ", ".join(state.get("review_findings", []))))
     emit_progress(args.seed, "Fail-Safe", "running", "failsafe_started")
@@ -1566,6 +1948,11 @@ def main():
         json.dumps(
             {
                 "seed": args.seed,
+                "content_mode": article.get("contentMode", args.content_mode),
+                "keyword_slug": args.slug,
+                "keyword_category": args.category,
+                "keyword_intent": args.intent,
+                "keyword_locale": args.locale,
                 "runtime": "langgraph" if LANGGRAPH_AVAILABLE else "fallback",
                 "llm_enabled": bool(state.get("use_llm")),
                 "llm_provider": state.get("llm_provider", "rules"),
@@ -1591,6 +1978,7 @@ def main():
     print("  runtime: %s" % ("LangGraph StateGraph" if LANGGRAPH_AVAILABLE else "compatibility fallback"))
     print("  llm: %s" % ("enabled" if state.get("use_llm") else "disabled"))
     print("  seed: %s" % args.seed)
+    print("  content_mode: %s" % article.get("contentMode"))
     print("  profile: %s" % state.get("profile_key"))
     print("  category: %s" % article["category"])
     print("  risk: %s" % article["riskLevel"])

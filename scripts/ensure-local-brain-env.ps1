@@ -62,7 +62,7 @@ if (-not (Test-Path -LiteralPath $VenvPython)) {
 
 $PreviousErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
-$Check = & $VenvPython -c "import streamlit, langgraph; print('ok')" 2>$null
+$Check = & $VenvPython -c "import langgraph; print('ok')" 2>$null
 $ImportExitCode = $LASTEXITCODE
 $ErrorActionPreference = $PreviousErrorActionPreference
 

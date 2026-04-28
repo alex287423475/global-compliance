@@ -92,6 +92,11 @@ const markdownComponents: Components = {
       {children}
     </a>
   ),
+  img: ({ alt, src }) => (
+    <span className="block border border-blue-900/10 bg-white p-2">
+      <img alt={alt || ""} className="aspect-[16/9] w-full object-cover" src={src || ""} />
+    </span>
+  ),
   strong: ({ children }) => <strong className="font-bold text-blue-950">{children}</strong>,
   hr: () => <hr className="my-12 border-blue-900/10" />,
 };
@@ -156,6 +161,16 @@ export default function InsightArticleClient({
           {dek ? <p className="mt-6 font-[family-name:var(--font-serif)] text-2xl leading-10 text-slate-700">{dek}</p> : null}
 
           <p className="mt-8 max-w-3xl text-base leading-8 text-slate-600">{summary}</p>
+
+          {article.coverImage ? (
+            <div className="mt-10 border border-blue-900/10 bg-white p-2">
+              <img
+                alt={article.imageAlt || title}
+                className="aspect-[16/9] w-full object-cover"
+                src={article.coverImage}
+              />
+            </div>
+          ) : null}
 
           <div className="mt-8 flex flex-wrap gap-6 border-y border-blue-900/10 py-5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
             <div>

@@ -19,4 +19,5 @@ __pycache__/
 local-brain/drafts/
 local-brain/audits/
 local-brain/config.json
+local-brain/runtime/
 tsconfig.tsbuildinfo

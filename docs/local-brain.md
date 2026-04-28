@@ -1,289 +1,275 @@
-# 本地 AI 兵工厂操作手册
+# Local Brain 合规文章自动化生产线
 
-目标：在没有 VPS 和 Strapi 的阶段，先用本地 AI 生成结构化情报文章，并安全写入当前 Vercel 前端项目。
+目标：在没有 VPS / Strapi 的阶段，先用本地多智能体生产合规长文草稿，写入当前 Next.js 网站内容源，再通过 GitHub + Vercel 发布到 `https://www.qqbytran.com/insights`。
 
-## 1. 当前阶段架构
+## 当前形态
 
-```text
-资料/选题
-  -> AI 生成结构化 JSON
-  -> 本地 schema 校验
-  -> 写入 content/insights.ts
-  -> npm run build
-  -> git push
-  -> Vercel 自动部署
-```
+Local Brain 已经不再使用 Streamlit。
 
-后续有 VPS/Strapi 后，最后一步会从“写入 `content/insights.ts`”替换为“POST 到 Strapi Read/Write API”。
+现在它和 SEO 文章自动生产线使用同样的技术栈与工作台架构：
 
-## 2. 文件结构
+- Next.js App Router 前端工作台
+- Next.js API Route 作为本地控制层
+- Python 生成器负责 Researcher / Writer / Reviewer
+- 本地 `status.json` 轮询展示后台任务进度
+- 草稿池 -> 校验 -> 发布中心 -> GitHub -> Vercel
+
+入口页面：
 
 ```text
-local-brain/
-  drafts/                  AI 输出的文章 JSON 草稿
-  prompts/                 Agent prompt
-  schema/                  文章 JSON schema
-
-scripts/local-brain/
-  validate-insight.mjs     校验文章 JSON
-  add-insight.mjs          校验并写入 content/insights.ts
-  add-insights-batch.mjs   批量校验并写入多篇文章
+http://127.0.0.1:3000/local-brain
 ```
 
-## 3. 标准工作流
-
-### 可视化控制台
-
-如果你不想敲命令，直接双击：
+线上发布目标：
 
 ```text
-start-local-brain-ui.bat
+https://www.qqbytran.com/insights
 ```
 
-浏览器会打开本地控制台：
+## 目录结构
 
 ```text
-http://127.0.0.1:8501
+app/local-brain/page.tsx                  Local Brain 工作台页面
+components/workflow/LocalBrainDashboard.tsx
+app/api/local-brain/status/route.ts       轮询状态
+app/api/local-brain/run/route.ts          启动后台任务
+app/api/local-brain/drafts/route.ts       草稿池
+app/api/local-brain/materials/route.ts    手动资料包上传
+app/api/local-brain/config/route.ts       LLM 配置读写
+app/api/local-brain/config/test/route.ts  LLM 连通性测试
+
+lib/local-brain-core.ts                   本地工作台共享工具
+scripts/local-brain/generate-insight.py   多智能体文章生成器
+scripts/local-brain/orchestrate.mjs       后台任务编排器
+scripts/local-brain/validate-insight.mjs  单篇草稿校验
+scripts/local-brain/add-insight.mjs       单篇导入 content/insights.ts
+scripts/local-brain/add-insights-batch.mjs
+scripts/publish-insights.ps1              批量发布到网站
+
+local-brain/drafts/                       草稿 JSON
+local-brain/audits/                       审计轨迹
+local-brain/materials/                    手动资料包
+local-brain/runtime/status.json           前端轮询状态文件
+local-brain/config.json                   本地 LLM 配置
 ```
 
-控制台支持：
+## 工作流
 
-```text
-输入种子词 -> 读取本地 RAG/VOC -> Researcher -> Writer -> Reviewer -> Fail-Safe 校验 -> 发布到 GitHub/Vercel
-```
+### 1. 知识库自动生产
 
-当前多智能体流程由 LangGraph StateGraph 编排：
-
-```text
-Researcher Agent -> Writer Agent -> Reviewer Agent
-                         ^             |
-                         |             v
-                    高危词命中 <- 条件边打回重写
-```
-
-说明：LangGraph 官方 Python 包要求 Python 3.10+。本项目的启动脚本会自动创建 `.venv-local-brain`，优先使用 Codex 自带 Python 3.12，并安装 Streamlit 与 LangGraph。
-
-Researcher / Writer / Reviewer 必须真实调用模型。没有配置 LLM Key 时，生产线会直接阻断，不允许生成本地规则草稿。
-
-本地 LLM 配置优先在 Streamlit 的 `5. 配置` 页面直接填写。前端保存到 `local-brain/config.json` 的配置优先级高于 `.env`，这样在控制台里切换提供商会立即成为生产线的实际配置。切换提供商时，API Base URL 和默认模型会自动适配。当前支持：
-
-```text
-OpenAI:   https://api.openai.com/v1                         / gpt-4o-mini
-Claude:   https://api.anthropic.com/v1/                      / claude-sonnet-4-5-20250929
-Gemini:   https://generativelanguage.googleapis.com/v1beta/openai/ / gemini-2.5-flash
-DeepSeek: https://api.deepseek.com                           / deepseek-chat
-```
-
-配置会保存到：
-
-```text
-local-brain/config.json
-```
-
-该文件已加入 `.gitignore`，不会提交到 GitHub。
-
-配置页里的“测试 LLM 配置”只做一次轻量 API 连通性探针，最多等待 30 秒，不再触发完整文章生产线。完整生产线请在 `1. 生产草稿` 中运行。
-
-运行生产线时，Streamlit 会实时显示文章在 `Researcher -> Writer -> Reviewer -> Fail-Safe` 之间的流转进度。每个 Agent 的开始、通过、打回重写或阻断状态都会同步刷新到前端，不需要等待整篇文章结束后才看到结果。
-
-也可以使用环境变量兜底；如果已经在 Streamlit 前端保存过配置，以前端配置为准：
-
-```bash
-LOCAL_BRAIN_PROVIDER=gemini
-LOCAL_BRAIN_API_KEY=sk-...
-LOCAL_BRAIN_MODEL=gemini-2.5-flash
-LOCAL_BRAIN_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-```
-
-Researcher 会读取：
+适合直接基于本地默认知识库运行：
 
 ```text
 local-brain/knowledge/
 local-brain/reviews/
 ```
 
-支持 `.md`、`.txt`、`.json`、`.csv`。你后续爬取的差评、竞品退款政策、支付网关通知、FDA/Stripe/PayPal 摘要都放进这两个目录。
-
-如果提示没有 Streamlit，先执行：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/ensure-local-brain-env.ps1
-```
-
-### 本地生产线用法
-
-如果你只是输入一个种子词，直接生成合规情报草稿：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器"
-```
-
-指定草稿输出目录：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器" -DraftDir "local-brain/drafts"
-```
-
-如果你要批量生产，先复制：
+流程：
 
 ```text
-local-brain/seeds.example.txt
+种子词
+  -> Researcher 汇总红线 / VOC / 证据线索
+  -> Writer 生成长文草稿 + intelligence cards
+  -> Reviewer 审核红线词、承诺语和语气
+  -> Fail-Safe 校验 JSON / Markdown / FAQ / 表格
+  -> 写入 local-brain/drafts
 ```
 
-为：
+### 2. 手动资料导入
+
+适合某个专题要临时追加资料。
+
+可在 `/local-brain` 页面上传三类材料：
+
+- 红线 / 合规资料
+- VOC / 投诉资料
+- 事实源 / 证据资料
+
+上传后会生成一个“资料包”，后台任务不再让前端拼本地路径，而是由服务端按 `packageId` 自动解析目录并注入生成器。
+
+## LLM 配置
+
+配置入口：
 
 ```text
-local-brain/seeds.txt
+/local-brain 页面底部的“模型配置”
 ```
 
-然后把每个种子词一行写进去，再双击：
+配置写入：
 
 ```text
-run-local-brain.bat
+local-brain/config.json
 ```
 
-本地生产线会执行：
+优先级：
+
+1. `/local-brain` 页面保存的配置
+2. 环境变量
+
+支持提供商：
 
 ```text
-种子词 -> 本地情报画像 -> 红线审计 -> 内容铸造 -> Fail-Safe 校验 -> 生成 JSON 草稿
+OpenAI   -> https://api.openai.com/v1
+Claude   -> https://api.anthropic.com/v1/
+Gemini   -> https://generativelanguage.googleapis.com/v1beta/openai/
+DeepSeek -> https://api.deepseek.com
 ```
 
-默认只生成草稿，不自动上线。确认草稿无误后，再双击：
+说明：
 
-```text
-publish-insights.bat
-```
+- 没有 API Key 时，生产线会硬阻断
+- 禁止无 LLM 干跑
+- “测试模型连接”只做轻量连通性探针，不会启动整条生产线
 
-如果你确认要生成后立刻发布，可以执行：
+## 页面使用方式
+
+### 1. 打开本地工作台
+
+先启动站点：
 
 ```bash
-powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器" -Publish
+npm run dev
 ```
 
-### 最简单用法
-
-把 AI 生成的文章 JSON 放进：
+然后进入：
 
 ```text
-local-brain/drafts/
+http://127.0.0.1:3000/local-brain
 ```
 
-然后双击项目根目录的：
+### 2. 输入种子词
+
+每行一个：
 
 ```text
-publish-insights.bat
+智能宠物喂食器
+Amazon POA root cause
+PayPal chargeback evidence
 ```
 
-脚本会自动完成：
+### 3. 可选：补充运营备注
+
+例如：
+
+- 目标市场
+- 必须规避的表达
+- 平台通知摘要
+- 希望强调的风险角度
+
+### 4. 运行文章生产
+
+页面会实时显示：
 
 ```text
-检查草稿 -> 导入网站 -> npm run build -> git commit -> git push -> Vercel 自动部署
+RUNNING / IDLE
+当前步骤
+Recent Log
 ```
 
-如果你想在命令行执行：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1
-```
-
-只提交不推送：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1 -NoPush
-```
-
-只检查草稿，不写入网站：
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1 -CheckOnly
-```
-
-如果工作区有其它未提交改动，脚本会停止，避免把无关内容一起发布。
-
-### 手动分步用法
-
-1. 准备原始资料。
-2. 使用 `local-brain/prompts/insight-agent-prompt.md` 让 AI 输出 JSON。
-3. 保存到：
+后台任务状态来自：
 
 ```text
-local-brain/drafts/your-article-slug.json
+local-brain/runtime/status.json
 ```
 
-4. 校验：
+### 5. 校验草稿
 
-```bash
-npm run brain:validate -- local-brain/drafts/your-article-slug.json
-```
+生成完成后，草稿会进入“草稿池”。
 
-5. 写入网站：
+你可以：
 
-```bash
-npm run brain:add -- local-brain/drafts/your-article-slug.json
-```
+- 勾选部分草稿
+- 或直接校验全部待发布草稿
 
-6. 如果一次生成多篇文章，可以批量导入：
-
-```bash
-npm run brain:add-batch -- local-brain/drafts
-```
-
-批量导入会先校验全部 JSON；只要有一篇不合格，就不会写入任何文章。已经存在的 slug 会被跳过，方便重复执行。
-
-正式写入前可以先干跑检查：
+校验命令底层仍然是：
 
 ```bash
 npm run brain:add-batch -- --dry-run local-brain/drafts
 ```
 
-7. 构建验证：
+### 6. 发布到网站
 
-```bash
-npm run build
-```
-
-8. 提交上线：
-
-```bash
-git add .
-git commit -m "Add insight article: your article title"
-git push
-```
-
-## 4. 内容规则
-
-- 不在前台文案中提 AI、自动化、爬虫或内部流程。
-- 文章定位是合规情报，不是法律意见。
-- 每篇文章必须有唯一 slug。
-- 每篇文章必须有中英文标题、摘要和正文段落。
-- 高风险内容先人工审阅，再上线。
-- 低置信度内容不能直接进入网站。
-
-## 5. 分类
-
-当前允许的分类：
+在“发布中心”输入：
 
 ```text
-Payment Risk
-Marketplace Appeal
-Market Entry
-Supply Chain
-IP Defense
-Crisis PR
-Capital Documents
-B2B Contracts
-Tax & Audit
-Data Privacy
+PUBLISH
 ```
 
-## 6. 上线后结果
+然后执行发布。
 
-新增文章会自动出现在：
+底层流程：
 
 ```text
-/insights
-/insights/{slug}
-/sitemap.xml
+选中的 draft JSON
+  -> 导入 content/insights.ts
+  -> next build
+  -> git commit
+  -> git push
+  -> Vercel 自动更新 qqbytran.com
 ```
 
-Vercel 会在 `git push` 后自动重新部署。
+如果只想本地提交，不想推 GitHub，可勾选：
+
+```text
+只做本地 commit，不推送 GitHub
+```
+
+## 命令行兜底
+
+如果不走工作台，也可以直接用命令：
+
+### 生成单篇
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run-local-brain.ps1 -Seed "智能宠物喂食器"
+```
+
+### 发布全部草稿
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1
+```
+
+### 只检查，不发布
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1 -CheckOnly
+```
+
+### 只 commit，不 push
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/publish-insights.ps1 -NoPush
+```
+
+## 输出物
+
+生成后主要会得到两类文件：
+
+### 草稿
+
+```text
+local-brain/drafts/<slug>.json
+```
+
+### 审计轨迹
+
+```text
+local-brain/audits/<slug>.audit.json
+```
+
+文章草稿不是简报卡片，而是长文载体，内部带：
+
+- Markdown 正文
+- FAQ
+- intelligence cards
+- 表格
+- CTA
+- 中英文标题与摘要
+
+## 发布边界
+
+- Local Brain 只负责生产、校验、导入、发布
+- 网站对外只展示成品文章，不暴露“AI 流水线”措辞
+- 高风险类目仍然建议人工复核后再发布
+- `local-brain/config.json` 已加入忽略列表，不应提交真实密钥

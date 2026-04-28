@@ -40,6 +40,7 @@ export function validateInsight(article) {
   const errors = [];
   const requiredFields = [
     "slug",
+    "contentMode",
     "title",
     "zhTitle",
     "category",
@@ -69,6 +70,10 @@ export function validateInsight(article) {
 
   if (article.slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(article.slug)) {
     errors.push("slug must be lowercase ASCII words separated by hyphens");
+  }
+
+  if (article.contentMode && !["standard", "fact-source"].includes(article.contentMode)) {
+    errors.push("contentMode must be standard or fact-source");
   }
 
   if (article.category && !allowedCategories.has(article.category)) {
@@ -183,6 +188,33 @@ export function validateInsight(article) {
 
   if (!/\|[^\n]+\|/.test(String(article.bodyMarkdown || ""))) {
     errors.push("bodyMarkdown should contain at least one markdown table");
+  }
+
+  if (article.contentMode === "fact-source") {
+    const body = String(article.bodyMarkdown || "");
+    const visualAssets = Array.isArray(article.visualAssets) ? article.visualAssets : [];
+    const tableCount = (body.match(/(?:^\|.+\|\s*$\n?)+/gm) || []).length;
+    if (body.length < 5200) {
+      errors.push("fact-source bodyMarkdown is too short for an evidence-backed article");
+    }
+    if (headings.length < 6) {
+      errors.push("fact-source bodyMarkdown must contain at least six H2/H3 headings");
+    }
+    if (tableCount < 2) {
+      errors.push("fact-source bodyMarkdown should contain at least two markdown tables");
+    }
+    if (!/core conclusion|核心结论|结论/i.test(body)) {
+      errors.push("fact-source article must include a core conclusion section");
+    }
+    if (!/evidence|证据|资料包|source file/i.test(body)) {
+      errors.push("fact-source article must name the evidence package or source files");
+    }
+    if (!/human|人工|manual confirmation|人工确认/i.test(body)) {
+      errors.push("fact-source article must define the human confirmation boundary");
+    }
+    if (visualAssets.length < 3) {
+      errors.push("fact-source article must include at least three visualAssets; run 刷新配图 before validation");
+    }
   }
 
   const faqQuestions = Array.isArray(article.faq) ? article.faq.map((item) => item.question) : [];

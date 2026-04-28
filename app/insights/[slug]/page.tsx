@@ -20,6 +20,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const title = `${article.metaTitle || article.title} | Global Bridge Compliance`;
   const description = article.metaDescription || article.summary;
   const url = `${siteUrl}/insights/${article.slug}`;
+  const imageUrl = article.ogImage || article.coverImage;
+  const absoluteImageUrl = imageUrl ? `${siteUrl}${imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`}` : undefined;
 
   return {
     title,
@@ -34,6 +36,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       url,
       siteName: "Global Bridge Compliance",
       type: "article",
+      images: absoluteImageUrl ? [{ url: absoluteImageUrl, alt: article.imageAlt || article.title }] : undefined,
       publishedTime: article.updatedAt,
       modifiedTime: article.updatedAt,
       section: article.category,
@@ -43,6 +46,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       card: "summary_large_image",
       title,
       description,
+      images: absoluteImageUrl ? [absoluteImageUrl] : undefined,
     },
     robots: {
       index: true,
@@ -74,6 +78,8 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
         !relatedArticles.some((related) => related.slug === item.slug),
     )
     .slice(0, 3);
+  const imageUrl = article.ogImage || article.coverImage;
+  const absoluteImageUrl = imageUrl ? `${siteUrl}${imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`}` : undefined;
 
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -86,6 +92,7 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
     mainEntityOfPage: `${siteUrl}/insights/${article.slug}`,
     keywords: article.relatedKeywords.join(", "),
     articleSection: article.category,
+    image: absoluteImageUrl,
     about: article.redlineTerms,
     author: {
       "@type": "Organization",
