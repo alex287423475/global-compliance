@@ -755,38 +755,20 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     if state_redlines:
         normalized["redlineTerms"] = list(dict.fromkeys(state_redlines[:8] + normalized["redlineTerms"]))[:8]
     if len(normalized["redlineTerms"]) < 4:
-        normalized["redlineTerms"] = list(
-            dict.fromkeys(
-                normalized["redlineTerms"]
-                + [
-                    "guaranteed approval",
-                    "risk-free return",
-                    "anonymous payment",
-                    "medical grade",
-                ]
-            )
-        )[:8]
+        raise PipelineError("Researcher/Writer returned fewer than four redline terms. Local fallback redline generation is disabled.")
 
     takeaways = normalized.get("keyTakeaways", [])
     if not isinstance(takeaways, list):
         takeaways = []
     normalized["keyTakeaways"] = [articleize_text(first_string(item)) for item in takeaways if first_string(item)]
     if len(normalized["keyTakeaways"]) < 3:
-        normalized["keyTakeaways"] = [
-            "Public-facing copy should describe operations and limits, not guaranteed outcomes.",
-            "Policy pages need to match actual refund handling, evidence requests, and support windows.",
-            "A category becomes easier to defend when screenshots, logs, and order records already exist before review starts.",
-        ]
+        raise PipelineError("Writer Agent returned fewer than three English key takeaways. Local fallback takeaway generation is disabled.")
     zh_takeaways = normalized.get("zhKeyTakeaways", [])
     if not isinstance(zh_takeaways, list):
         zh_takeaways = []
     normalized["zhKeyTakeaways"] = [first_string(item) for item in zh_takeaways if first_string(item)]
     if len(normalized["zhKeyTakeaways"]) < 3:
-        normalized["zhKeyTakeaways"] = [
-            "公开页面应描述可验证的运营边界，而不是承诺不可控结果。",
-            "政策页面必须与真实退款处理、证据要求和客服响应窗口保持一致。",
-            "只有截图、日志和订单记录提前存在，类目页面才更容易在审核和争议中自洽。",
-        ]
+        raise PipelineError("Writer Agent returned fewer than three Chinese key takeaways. Local fallback takeaway generation is disabled.")
 
     cards = normalized.get("intelligenceCards", [])
     if not isinstance(cards, list):
@@ -831,53 +813,16 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
                 }
             )
     if len(cleaned_cards) < 3:
-        evidence_files = state.get("evidence", [])[:3]
-        if not evidence_files:
-            evidence_files = ["policy screenshots", "support logs", "checkout captures"]
-        cleaned_cards = [
-            {
-                "label": "Claim Boundary",
-                "zhLabel": "Claim Boundary",
-                "finding": "The safest public copy describes documented operations and customer limits instead of implying guaranteed outcomes or invisible review friction.",
-                "zhFinding": "The safest public copy describes documented operations and customer limits instead of implying guaranteed outcomes or invisible review friction.",
-                "evidence": "Compare product pages, policy pages, checkout captures, and support replies for consistency before scale.",
-                "zhEvidence": "Compare product pages, policy pages, checkout captures, and support replies for consistency before scale.",
-                "action": "Rewrite the public page around verifiable process language and move sensitive phrases into the internal redline list.",
-                "zhAction": "Rewrite the public page around verifiable process language and move sensitive phrases into the internal redline list.",
-                "severity": normalized["riskLevel"] if normalized["riskLevel"] in {"Critical", "High", "Medium"} else "High",
-            },
-            {
-                "label": "Evidence Gap",
-                "zhLabel": "Evidence Gap",
-                "finding": "The article becomes commercially useful only when its claims can be backed by evidence files that already exist before review pressure appears.",
-                "zhFinding": "The article becomes commercially useful only when its claims can be backed by evidence files that already exist before review pressure appears.",
-                "evidence": "Minimum files include %s." % ", ".join(evidence_files),
-                "zhEvidence": "Minimum files include %s." % ", ".join(evidence_files),
-                "action": "Create a versioned evidence folder before publishing or scaling traffic to the category page.",
-                "zhAction": "Create a versioned evidence folder before publishing or scaling traffic to the category page.",
-                "severity": "High",
-            },
-            {
-                "label": "Support Alignment",
-                "zhLabel": "Support Alignment",
-                "finding": "Refund, delivery, and support language should describe the same operating reality across the article, policy pages, and customer-service replies.",
-                "zhFinding": "Refund, delivery, and support language should describe the same operating reality across the article, policy pages, and customer-service replies.",
-                "evidence": "Review support tickets, refund templates, shipping policy text, and checkout promises for conflicting timelines or outcomes.",
-                "zhEvidence": "Review support tickets, refund templates, shipping policy text, and checkout promises for conflicting timelines or outcomes.",
-                "action": "Use one controlled wording set for SEO pages, policy pages, and support templates so review teams see a coherent record.",
-                "zhAction": "Use one controlled wording set for SEO pages, policy pages, and support templates so review teams see a coherent record.",
-                "severity": "Medium",
-            },
-        ]
+        raise PipelineError("Writer Agent returned fewer than three intelligence cards. Local fallback intelligence-card generation is disabled.")
     for index, card in enumerate(cleaned_cards):
         if looks_english_dominant(card.get("zhLabel")):
-            card["zhLabel"] = ["主张边界", "证据缺口", "客服一致性", "风险信号", "操作边界", "复核节点"][min(index, 5)]
+            raise PipelineError("Writer Agent returned an English-dominant Chinese card label at index %d. Local fallback card rewriting is disabled." % index)
         if looks_english_dominant(card.get("zhFinding")):
-            card["zhFinding"] = "该风险信号需要结合具体通知、政策页面、订单记录和客服历史确认，不能直接按英文结论发布。"
+            raise PipelineError("Writer Agent returned an English-dominant Chinese card finding at index %d. Local fallback card rewriting is disabled." % index)
         if looks_english_dominant(card.get("zhEvidence")):
-            card["zhEvidence"] = "发布前应核对源文件、截图、时间戳和运营记录，确保判断有证据支撑。"
+            raise PipelineError("Writer Agent returned an English-dominant Chinese card evidence field at index %d. Local fallback card rewriting is disabled." % index)
         if looks_english_dominant(card.get("zhAction")):
-            card["zhAction"] = "将该发现转化为页面措辞修正、证据清单和人工复核事项。"
+            raise PipelineError("Writer Agent returned an English-dominant Chinese card action at index %d. Local fallback card rewriting is disabled." % index)
     normalized["intelligenceCards"] = cleaned_cards[:6]
 
     sections = normalized.get("sections", [])
@@ -904,38 +849,19 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
             }
         )
     if len(cleaned_sections) < 4:
-        fallback = build_fallback_article(state, seed, state.get("revision_count", 0))
-        cleaned_sections = fallback["sections"]
-    else:
-        fallback_sections = build_fallback_article(state, seed, state.get("revision_count", 0))["sections"]
-        for index, section in enumerate(cleaned_sections):
-            body = first_string(section.get("body"))
-            if len(body) < 280 or "\n\n" not in body:
-                fallback_body = first_string(fallback_sections[min(index, len(fallback_sections) - 1)].get("body"))
-                section["body"] = paragraphize("%s\n\n%s" % (body, fallback_body))
-            zh_body = first_string(section.get("zhBody"))
-            if len(zh_body) < 140 or "\n\n" not in zh_body:
-                fallback_zh_body = first_string(fallback_sections[min(index, len(fallback_sections) - 1)].get("zhBody"))
-                section["zhBody"] = paragraphize("%s\n\n%s" % (zh_body, fallback_zh_body))
-    zh_section_headings = [
-        "为什么审核压力通常早于卖家察觉",
-        "哪些主张不应该出现在公开文章中",
-        "一篇可读文章会暴露怎样的真实客服体系",
-        "哪些证据文件能把文章变成运营资产",
-        "如何在搜索意图和合规边界之间保持平衡",
-        "发布前必须人工确认哪些事实",
-    ]
-    zh_section_bodies = [
-        "真正的风险往往不是某一个词，而是产品承诺、退款预期、交付说明和运营边界之间逐渐发生冲突。文章需要解释这种冲突如何被平台审核、支付审查或客户争议放大。\n\n因此，中文正文必须像一篇可阅读的专业文章，而不是英文内部提示词的翻译残留。它应当先说明业务问题，再把主张风险、政策风险和证据风险逐层展开。",
-        "高意图关键词仍然重要，但它不能把页面推向不可验证的承诺。文章可以解释红线问题，也可以说明为什么某些表达危险，但不能把这些词当作标题、政策页或结账文案中的可用措辞。\n\n更稳妥的写法，是用可验证的流程、支持窗口、退款边界和资料清单来承接商业意图，让内容既能获取搜索流量，也不会制造新的审核风险。",
-        "一篇强文章不只是改几个形容词。它要让产品页、FAQ、退款政策、履约说明和客服回复描述同一个运营现实。读者读完后，应能理解产品能做什么、不能做什么、团队如何响应，以及哪些承诺可以被书面记录支撑。\n\n这也是许多生成稿失败的地方：文字看似流畅，却无法落到客服行为和证据资料上。可发布文章必须补上这个缺口。",
-        "文章只有被证据资料支撑时，才会从内容练习变成运营资产。最低资料集通常包括政策截图、客服记录、履约记录、订单追踪证据和平台通知。\n\n当这些文件存在后，同一篇文章才能同时服务 SEO、支付审核、客服处理和内部培训，而不是在争议或复核到来时变成无法解释的营销文本。",
-    ]
+        raise PipelineError("Writer Agent returned fewer than four developed sections. Local fallback section generation is disabled.")
+    for index, section in enumerate(cleaned_sections):
+        body = first_string(section.get("body"))
+        if len(body) < 280 or "\n\n" not in body:
+            raise PipelineError("Writer Agent returned an underdeveloped English section at index %d. Local fallback section generation is disabled." % index)
+        zh_body = first_string(section.get("zhBody"))
+        if len(zh_body) < 140 or "\n\n" not in zh_body:
+            raise PipelineError("Writer Agent returned an underdeveloped Chinese section at index %d. Local fallback section generation is disabled." % index)
     for index, section in enumerate(cleaned_sections):
         if looks_english_dominant(section.get("zhHeading")):
-            section["zhHeading"] = zh_section_headings[min(index, len(zh_section_headings) - 1)]
+            raise PipelineError("Writer Agent returned an English-dominant Chinese section heading at index %d. Local fallback section rewriting is disabled." % index)
         if looks_english_dominant(section.get("zhBody")):
-            section["zhBody"] = zh_section_bodies[min(index, len(zh_section_bodies) - 1)]
+            raise PipelineError("Writer Agent returned an English-dominant Chinese section body at index %d. Local fallback section rewriting is disabled." % index)
     normalized["sections"] = cleaned_sections
 
     normalized["conclusion"] = paragraphize(
@@ -955,13 +881,7 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
         related_keywords = []
     normalized["relatedKeywords"] = [first_string(item) for item in related_keywords if first_string(item)]
     if len(normalized["relatedKeywords"]) < 6:
-        normalized["relatedKeywords"] = list(
-            dict.fromkeys(
-                normalized["relatedKeywords"]
-                + [seed, normalized["category"], normalized["market"]]
-                + state.get("safe_terms", [])[:6]
-            )
-        )[:8]
+        raise PipelineError("Writer Agent returned fewer than six related keywords. Local fallback keyword generation is disabled.")
 
     faq = normalized.get("faq", [])
     if not isinstance(faq, list):
@@ -982,61 +902,14 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
                 }
             )
     if len(cleaned_faq) < 3:
-        cleaned_faq = [
-            {
-                "question": "What usually triggers extra scrutiny in this category?",
-                "answer": "Scrutiny usually builds when product claims, policy wording, and support messages describe different realities. The risk is not a single phrase by itself, but the pattern of promises the business cannot fully evidence once a payment review, platform escalation, or customer dispute arrives.",
-                "zhQuestion": "这个类目通常为什么会触发额外审核？",
-                "zhAnswer": "额外审核通常来自产品文案、政策语言和客服消息描述了不同的运营现实。风险不只是某一个词，而是当支付审核、平台升级或客户争议出现时，企业无法完整举证的一组承诺。",
-            },
-            {
-                "question": "What should a compliant article help the operator prepare?",
-                "answer": "It should help the operator align SEO copy, policy pages, refund handling language, support windows, and evidence files. A useful article is not only readable; it also maps directly to the records and workflows the team will rely on during review.",
-                "zhQuestion": "一篇合规文章应该帮助运营者准备什么？",
-                "zhAnswer": "它应帮助运营者校准 SEO 文案、政策页面、退款处理语言、客服窗口和证据文件。真正有用的文章不只是可读，还能映射到团队在审核中会依赖的记录和流程。",
-            },
-            {
-                "question": "Why is evidence preparation part of SEO content quality here?",
-                "answer": "Because the page will eventually be tested by reality. If the article implies a cleaner process or a broader claim than the business can prove, the content may attract traffic but it also raises dispute and review risk. Evidence keeps the article commercially usable.",
-                "zhQuestion": "为什么证据准备也是 SEO 内容质量的一部分？",
-                "zhAnswer": "因为页面最终会被真实运营检验。如果文章暗示的流程比企业能证明的更干净，或主张比证据更宽，内容可能带来流量，也会提高争议和审核风险。证据让文章保持商业可用。",
-            },
-        ]
-    english_faq_fallbacks = [
-        {
-            "question": "What usually triggers extra scrutiny in this category?",
-            "answer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
-            "zhQuestion": "这个类目通常为什么会触发额外审核？",
-            "zhAnswer": "额外审核通常来自产品文案、政策语言、客服消息和结账承诺之间的冲突信号。审核人员和客户会把这些层次互相对照，因此不一致往往比某一个词本身更危险。",
-        },
-        {
-            "question": "How should the article handle high-intent commercial keywords?",
-            "answer": "It should keep commercial relevance while tightening the implied promise. The article can discuss buyer search behavior, but it should reframe those phrases through operational wording, documented limits, and evidence-backed explanations.",
-            "zhQuestion": "文章应该如何处理高意图商业关键词？",
-            "zhAnswer": "文章应保留商业相关性，同时收紧关键词背后的隐含承诺。它可以讨论买家实际搜索的内容，但必须通过运营措辞、记录边界和证据说明重新框定这些词。",
-        },
-        {
-            "question": "What evidence should exist before traffic scales?",
-            "answer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
-            "zhQuestion": "放大流量前应该准备哪些证据？",
-            "zhAnswer": "最低证据包应覆盖政策截图、客服日志、履约记录，以及与该类目相关的订单追踪或产品表现证明。当争议、审核或审计到来时，这些文件能让文章保持可辩护。",
-        },
-        {
-            "question": "When should a human review the article before publication?",
-            "answer": "Human review is required whenever the draft references account-specific notices, customer communications, supplier records, or appeal wording that could be submitted to a platform, payment provider, or regulator.",
-            "zhQuestion": "什么时候必须在发布前人工复核？",
-            "zhAnswer": "只要草稿涉及具体账号通知、客户沟通、供应商记录，或可能提交给平台、支付机构、监管方的申诉措辞，就必须由人工复核。",
-        },
-    ]
+        raise PipelineError("Writer Agent returned fewer than three FAQ entries. Local fallback FAQ generation is disabled.")
     for index, item in enumerate(cleaned_faq):
-        fallback = english_faq_fallbacks[min(index, len(english_faq_fallbacks) - 1)]
         if cjk_count(item.get("question")) > 8 or cjk_count(item.get("answer")) > 40:
-            item["question"] = fallback["question"]
-            item["answer"] = fallback["answer"]
+            raise PipelineError("Writer Agent mixed Chinese into English FAQ entry %d. Local fallback FAQ rewriting is disabled." % index)
         if looks_english_dominant(item.get("zhQuestion")):
-            item["zhQuestion"] = fallback["zhQuestion"]
+            raise PipelineError("Writer Agent returned an English-dominant Chinese FAQ question at index %d. Local fallback FAQ rewriting is disabled." % index)
         if looks_english_dominant(item.get("zhAnswer")):
-            item["zhAnswer"] = fallback["zhAnswer"]
+            raise PipelineError("Writer Agent returned an English-dominant Chinese FAQ answer at index %d. Local fallback FAQ rewriting is disabled." % index)
     normalized["faq"] = cleaned_faq
 
     normalized["bodyMarkdown"] = first_string(normalized.get("bodyMarkdown"))
@@ -1044,8 +917,7 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     if not normalized["bodyMarkdown"]:
         normalized["bodyMarkdown"] = build_markdown_article(normalized, state, "en")
     elif len(normalized["bodyMarkdown"]) < min_markdown_length:
-        supplement = build_markdown_article(build_fallback_article(state, seed, state.get("revision_count", 0)), state, "en")
-        normalized["bodyMarkdown"] = (normalized["bodyMarkdown"].strip() + "\n\n---\n\n" + supplement).strip()
+        raise PipelineError("Writer Agent returned bodyMarkdown below the minimum length. Local fallback markdown supplementation is disabled.")
     if content_mode == "fact-source" and needs_fact_source_blocks(normalized["bodyMarkdown"]):
         normalized["bodyMarkdown"] = (fact_source_blocks(normalized, state, "en") + "\n\n---\n\n" + normalized["bodyMarkdown"].strip()).strip()
     if cjk_count(normalized["bodyMarkdown"]) > 120:
@@ -1055,8 +927,7 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     if not normalized["zhBodyMarkdown"]:
         normalized["zhBodyMarkdown"] = build_markdown_article(normalized, state, "zh")
     elif len(normalized["zhBodyMarkdown"]) < min_zh_markdown_length:
-        supplement = build_markdown_article(build_fallback_article(state, seed, state.get("revision_count", 0)), state, "zh")
-        normalized["zhBodyMarkdown"] = (normalized["zhBodyMarkdown"].strip() + "\n\n---\n\n" + supplement).strip()
+        raise PipelineError("Writer Agent returned zhBodyMarkdown below the minimum length. Local fallback markdown supplementation is disabled.")
     if content_mode == "fact-source" and needs_fact_source_blocks(normalized["zhBodyMarkdown"]):
         normalized["zhBodyMarkdown"] = (fact_source_blocks(normalized, state, "zh") + "\n\n---\n\n" + normalized["zhBodyMarkdown"].strip()).strip()
     if looks_english_dominant(normalized["zhBodyMarkdown"]) or cjk_count(normalized["zhBodyMarkdown"]) < 500:
@@ -1167,20 +1038,7 @@ class OpenAICompatibleClient:
     def available(self) -> bool:
         return bool(self.api_key)
 
-    def chat_json(self, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> Dict[str, Any]:
-        if not self.available:
-            raise PipelineError("LLM is not configured. Set it in local-brain/config.json or LOCAL_BRAIN_API_KEY.")
-
-        payload = {
-            "model": self.model,
-            "temperature": temperature,
-            "max_tokens": 4096,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "response_format": {"type": "json_object"},
-        }
+    def request_chat_content(self, payload: Dict[str, Any]) -> str:
         data = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             self.base_url + "/chat/completions",
@@ -1211,8 +1069,46 @@ class OpenAICompatibleClient:
                 time.sleep(1.5 * attempt)
 
         response_data = json.loads(raw)
-        content = response_data["choices"][0]["message"]["content"]
-        return parse_json_object(content)
+        return response_data["choices"][0]["message"]["content"]
+
+    def chat_json(self, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> Dict[str, Any]:
+        if not self.available:
+            raise PipelineError("LLM is not configured. Set it in local-brain/config.json or LOCAL_BRAIN_API_KEY.")
+
+        payload = {
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": 8192,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+        content = self.request_chat_content(payload)
+        try:
+            return parse_json_object(content)
+        except json.JSONDecodeError as first_error:
+            repair_payload = {
+                "model": self.model,
+                "temperature": 0,
+                "max_tokens": 8192,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You repair malformed JSON from a previous LLM response. Return only one valid JSON object. Do not add, remove, invent, summarize, or replace content. Preserve all fields and text that are present.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Repair this malformed JSON into one valid JSON object:\n\n%s" % content,
+                    },
+                ],
+                "response_format": {"type": "json_object"},
+            }
+            try:
+                return parse_json_object(self.request_chat_content(repair_payload))
+            except Exception as repair_error:
+                raise PipelineError("LLM returned invalid JSON and the LLM repair request also failed: %s | %s" % (first_error, repair_error))
 
 
 def select_profile(seed: str, profiles: Dict[str, Any], category_hint: str = "") -> Tuple[str, Dict[str, Any]]:
@@ -1281,29 +1177,6 @@ def retrieve_snippets(seed: str, directory: Path, limit: int = 5) -> List[Dict[s
     return [{"file": str(item[1]), "snippet": item[2]} for item in scored[:limit]]
 
 
-def fallback_research(state: WorkflowState) -> Dict[str, Any]:
-    profile = state["profile"]
-    seed = state["seed"]
-    source_summary = " ".join(item["snippet"][:240] for item in state.get("source_snippets", [])[:3])
-    review_summary = " ".join(item["snippet"][:240] for item in state.get("review_snippets", [])[:3])
-    safe_terms = profile.get("safe_terms", [])
-    evidence = profile.get("evidence", [])
-    return {
-        "research_data": (
-            "Seed: %s. Profile: %s. Key operating risks include payment review, policy wording, "
-            "evidence completeness, and unverifiable claim exposure. Local sources: %s Reviews: %s"
-            % (seed, state.get("profile_key"), source_summary or "none", review_summary or "none")
-        ),
-        "pain_points": [
-            "policy wording may overpromise outcomes",
-            "evidence package may be incomplete during review",
-            "customer disputes may expose fulfillment gaps",
-        ],
-        "safe_terms": safe_terms,
-        "evidence": evidence,
-    }
-
-
 def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
     profiles = state["profiles"]
     forbidden_terms = state["forbidden_terms"]
@@ -1331,33 +1204,35 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
         strict_terms=strict_terms,
     )
 
-    research = fallback_research(base_state)
     llm = state.get("llm")
-    if state.get("use_llm") and llm and llm.available:
-        prompt = {
-            "seed_keyword": seed,
-            "profile": profile,
-            "existing_red_lines": redline_terms,
-            "local_sources": source_snippets,
-            "review_voc": review_snippets,
-            "operator_notes": state.get("notes", ""),
-        }
-        research_system_prompt = read_prompt_file(
-            "research-system.md",
-            "You are a cross-border trade risk intelligence analyst. Return only JSON with keys: research_data, pain_points, red_lines, safe_terms, evidence. Extract risks from local RAG notes and review VOC. Do not write an article.",
-        )
-        result = llm.chat_json(
-            research_system_prompt,
-            json.dumps(prompt, ensure_ascii=False),
-            temperature=0.1,
-        )
-        research = {
-            "research_data": str(result.get("research_data", research["research_data"])),
-            "pain_points": list(result.get("pain_points", research["pain_points"]))[:8],
-            "safe_terms": list(result.get("safe_terms", research["safe_terms"]))[:12],
-            "evidence": list(result.get("evidence", research["evidence"]))[:12],
-        }
-        redline_terms = list(dict.fromkeys(redline_terms + list(result.get("red_lines", []))))
+    if not state.get("use_llm") or not llm or not llm.available:
+        raise PipelineError("Researcher Agent requires a configured LLM. Mock or local fallback research is disabled.")
+    prompt = {
+        "seed_keyword": seed,
+        "profile": profile,
+        "existing_red_lines": redline_terms,
+        "local_sources": source_snippets,
+        "review_voc": review_snippets,
+        "operator_notes": state.get("notes", ""),
+    }
+    research_system_prompt = read_prompt_file(
+        "research-system.md",
+        "You are a cross-border trade risk intelligence analyst. Return only JSON with keys: research_data, pain_points, red_lines, safe_terms, evidence. Extract risks from local RAG notes and review VOC. Do not write an article.",
+    )
+    result = llm.chat_json(
+        research_system_prompt,
+        json.dumps(prompt, ensure_ascii=False),
+        temperature=0.1,
+    )
+    research = {
+        "research_data": str(result.get("research_data", "")).strip(),
+        "pain_points": list(result.get("pain_points", []))[:8],
+        "safe_terms": list(result.get("safe_terms", []))[:12],
+        "evidence": list(result.get("evidence", []))[:12],
+    }
+    if not research["research_data"] or not research["pain_points"] or not research["safe_terms"] or not research["evidence"]:
+        raise PipelineError("Researcher Agent returned incomplete intelligence JSON. Fallback research is disabled.")
+    redline_terms = list(dict.fromkeys(redline_terms + list(result.get("red_lines", []))))
 
     emit_progress(
         seed,
@@ -1397,198 +1272,6 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
     }
 
 
-def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count: int) -> Dict[str, Any]:
-    profile = state["profile"]
-    market = profile.get("market", "North America")
-    slug_override = first_string(state.get("slug_override"))
-    seed_title = title_case_seed(english_topic_label(safe_seed, slug_override))
-    seed_zh = chinese_topic_label(safe_seed, "该类目")
-    slug = slugify(safe_seed + " compliance guide")
-    evidence_items = state.get("evidence", [])[:5]
-    evidence_text = ", ".join(evidence_items) if evidence_items else "policy screenshots, support logs, fulfillment records, and order tracking evidence"
-    safe_terms = state.get("safe_terms", [])[:6]
-    safe_terms_text = ", ".join(safe_terms) if safe_terms else "documented specifications, operational limits, support process, and evidence-backed language"
-    rewrite_note = " after reviewer revision" if revision_count > 0 else ""
-    return {
-        "slug": slug,
-        "contentMode": state.get("content_mode", "standard"),
-        "title": "What cross-border sellers should fix before scaling %s%s" % (seed_title, rewrite_note),
-        "zhTitle": "%s合规风险与证据准备指南" % safe_seed,
-        "category": profile.get("category", "Payment Risk"),
-        "market": market,
-        "riskLevel": profile.get("risk_level", "High"),
-        "updatedAt": dt.date.today().isoformat(),
-        "metaTitle": "What cross-border sellers should fix before scaling %s" % seed_title,
-        "metaDescription": "A long-form compliance article on safer claims, policy wording, support boundaries, and evidence files for %s sellers in %s." % (seed_title, market),
-        "dek": "A publishable intelligence article on the claims, policy wording, support boundaries, and evidence files that matter before this category attracts avoidable review.",
-        "zhDek": "围绕%s的公开主张、政策措辞、客服边界和证据资料，建立可发布的合规内容框架。" % safe_seed,
-        "summary": "A publishable compliance article for teams selling %s into %s. It explains how to write readable public copy, align policy pages with real operations, and prepare the evidence package needed before disputes, payment review, or platform checks arrive." % (seed_title, market),
-        "zhSummary": "一篇面向%s的可发布长文，说明页面文案、政策页面、客服语言和证据文件如何保持一致。" % safe_seed,
-        "introduction": (
-            "Many operators treat category compliance as a last-minute editing problem. In practice, review pressure builds much earlier: "
-            "the article headline promises too much, the policy page suggests a cleaner process than the team can prove, and support "
-            "messages quietly introduce a third version of the truth.\n\n"
-            "A real publishable article should do more than list red flags. It should explain where scrutiny starts, how demand-capture "
-            "language can stay commercially useful without drifting into prohibited claims, and what documents must already exist before "
-            "the first dispute lands."
-        ),
-        "zhIntroduction": (
-            "这篇文章应先说明审核压力如何出现：它通常不是由某一个词单独触发，而是页面主张、政策措辞和客服语言描述了不同的运营现实。\n\n"
-            "随后，文章需要解释哪些商业表达可以保留在公开页面，哪些高风险措辞必须留在内部红线清单，以及在第一次争议或审核到来之前，哪些文件必须已经准备好。"
-        ),
-        "keyTakeaways": [
-            "Use the article to clarify operating boundaries, not just to replace a few risky adjectives.",
-            "Align product copy, FAQ answers, refund policy, and support responses so they describe the same reality.",
-            "Keep redline phrases in an internal warning list and keep public-facing copy tied to verifiable operations.",
-            "Build the evidence package before scale so the article can support SEO, customer service, and review defense at the same time.",
-        ],
-        "zhKeyTakeaways": [
-            "用文章定义运营边界，而不是只替换几个高风险形容词。",
-            "产品文案、FAQ、退款政策和客服回复必须描述同一个运营现实。",
-            "把红线表达留在内部警戒清单中，让公开文案绑定可验证的运营事实。",
-            "在放大流量前准备证据资料，让文章同时支持 SEO、客服处理和审核应对。",
-        ],
-        "redlineTerms": state.get("redline_terms", [])[:8],
-        "relatedKeywords": list(dict.fromkeys([safe_seed, seed_title, market] + safe_terms + evidence_items))[:8],
-        "intelligenceCards": [
-            {
-                "label": "Claim Boundary",
-                "zhLabel": "主张边界",
-                "finding": "Public copy for %s should explain documented operating boundaries rather than compressing customer uncertainty into absolute outcomes." % seed_title,
-                "zhFinding": "%s的公开文案应解释有记录的运营边界，而不是把客户不确定性压缩成绝对结果承诺。" % safe_seed,
-                "evidence": "Compare product descriptions, checkout language, refund policy screenshots, and support replies for the same operating reality.",
-                "zhEvidence": "对照产品描述、结账语言、退款政策截图和客服回复，确认它们是否描述同一个运营现实。",
-                "action": "Rewrite high-intent page language around verifiable operations and keep sensitive phrases in the internal redline watchlist.",
-                "zhAction": "围绕可验证的运营事实重写高意图页面语言，并把敏感表达放入内部红线观察清单。",
-                "severity": profile.get("risk_level", "High"),
-            },
-            {
-                "label": "Evidence File",
-                "zhLabel": "证据文件",
-                "finding": "The article becomes defensible only when the page claims can be traced to evidence files before a payment review, dispute, or platform check appears.",
-                "zhFinding": "只有当页面主张能在支付审核、争议或平台检查出现前追溯到证据文件时，文章才具备可辩护性。",
-                "evidence": "Minimum file set: %s." % evidence_text,
-                "zhEvidence": "最低资料集包括：%s。" % evidence_text_zh(evidence_items),
-                "action": "Create a versioned evidence folder and reference that file set when updating SEO pages, policy pages, and support templates.",
-                "zhAction": "建立带版本记录的证据文件夹，并在更新 SEO 页面、政策页面和客服模板时引用这套资料。",
-                "severity": "High",
-            },
-            {
-                "label": "Support Reality",
-                "zhLabel": "客服现实",
-                "finding": "Support replies, refund handling, and delivery explanations can quietly contradict the public article even when the article itself sounds controlled.",
-                "zhFinding": "即使文章本身听起来克制，客服回复、退款处理和交付解释也可能悄悄与公开内容发生冲突。",
-                "evidence": "Use support logs, refund decisions, and delivery timelines to test whether the article describes the same reality customers experience.",
-                "zhEvidence": "使用客服日志、退款决策和交付时间线，检查文章是否描述了客户实际经历的同一个现实。",
-                "action": "Align customer-service templates with the article before scaling traffic or launching paid acquisition into the page.",
-                "zhAction": "在放大流量或投放付费获客之前，让客服模板与文章内容保持一致。",
-                "severity": "Medium",
-            },
-        ],
-        "sections": [
-            {
-                "heading": "Why %s starts drawing review before the seller notices" % seed_title,
-                "zhHeading": "%s为什么会在卖家察觉前进入审核压力区" % safe_seed,
-                "body": (
-                    "For %s, the real risk rarely starts with one forbidden word alone. Review pressure usually comes from the combination "
-                    "of product claims, refund expectations, delivery promises, and how clearly the seller explains operational limits. "
-                    "A publishable article should show that scrutiny begins when these layers contradict each other, not only when a single "
-                    "phrase looks aggressive.\n\n"
-                    "That is why article structure matters. The headline should frame the business problem, the introduction should explain "
-                    "the review context, and the body should move from claim risk to policy risk to evidence risk. If the copy reads like "
-                    "a memo, it stays internal. If it reads like an article with a clear argument, it becomes useful on-site intelligence."
-                ) % seed_title,
-                "zhBody": (
-                    "%s的真实风险很少只来自一个禁用词。审核压力通常来自产品承诺、退款预期、交付语言和运营边界之间的组合冲突。文章应说明这些层次何时开始互相矛盾，而不是只盯着某个激进短语。\n\n"
-                    "这也是文章结构重要的原因。标题要框定商业问题，导语要解释审核语境，正文要从主张风险推进到政策风险和证据风险。只有这样，文章才像站内情报，而不是内部备忘录。"
-                ) % safe_seed,
-            },
-            {
-                "heading": "Which claims should stay out of the article, not just out of the ad copy",
-                "zhHeading": "哪些主张不应出现在文章中，而不只是广告中",
-                "body": (
-                    "High-intent keywords still matter, but they must not force the page into prohibited or unverifiable claims. Build article "
-                    "sections around safer demand-capture phrases such as %s, then explain what each phrase can and cannot imply in public-facing "
-                    "copy.\n\n"
-                    "The important distinction is editorial. A good article can name the redline problem, explain why it is risky, and then pivot "
-                    "into safer wording without sounding evasive. Keep the truly sensitive wording in an internal warning list instead of surfacing "
-                    "it in titles, checkout copy, return policies, or ad language."
-                ) % safe_terms_text,
-                "zhBody": (
-                    "高意图关键词仍然重要，但它不能把页面推向被禁止或无法验证的主张。文章可以围绕更安全的需求表达展开，并解释每一种表达在公开页面中能暗示什么、不能暗示什么。\n\n"
-                    "关键区别在于编辑边界。好文章可以点出红线问题，解释为什么危险，再转向更安全的措辞；真正敏感的表达应留在内部警戒清单，而不是出现在标题、政策页或结账文案中。"
-                ),
-            },
-            {
-                "heading": "What a readable article reveals about the real support stack",
-                "zhHeading": "一篇可读文章会暴露怎样的真实客服体系",
-                "body": (
-                    "A stronger page does not just rewrite adjectives. It aligns product copy, FAQ answers, refund language, fulfillment notes, "
-                    "and support replies so they all describe the same operating reality. The article becomes persuasive when readers leave with "
-                    "a clear picture of what the product does, what it does not do, how support responds, and which promises the seller is willing "
-                    "to stand behind in writing.\n\n"
-                    "This is also where many generated drafts fail. They sound polished, but they do not translate into customer-service behavior. "
-                    "A publishable article has to bridge that gap by showing what the operator will actually document, how evidence will be collected, "
-                    "and where the support boundary sits when a claim is challenged."
-                ),
-                "zhBody": (
-                    "更强的页面不只是改写形容词。它会让产品文案、FAQ、退款语言、履约说明和客服回复描述同一个运营现实。读者离开页面时，应清楚知道产品能做什么、不能做什么、团队如何响应，以及哪些承诺可以被书面记录支撑。\n\n"
-                    "许多生成稿失败就在这里：文字看起来顺滑，却无法转化为客服行为。可发布文章必须说明运营者实际会记录什么、如何收集证据，以及当主张被挑战时支持边界在哪里。"
-                ),
-            },
-            {
-                "heading": "Which evidence files turn the article into an operating asset",
-                "zhHeading": "哪些证据文件能把文章变成运营资产",
-                "body": (
-                    "The article only becomes operationally useful when it is backed by documents. For this category, the minimum evidence set should "
-                    "include %s. Without that layer, even well-written copy remains a content exercise rather than a defensible commercial asset.\n\n"
-                    "Once those files exist, the article can support SEO work, payment review, customer-service handling, and internal training at the "
-                    "same time. That is the standard worth aiming for: not a decorative article, but one that still makes sense when a dispute, review, "
-                    "or audit asks for proof."
-                ) % evidence_text,
-                "zhBody": (
-                    "文章只有被文件支撑时，才会具备运营价值。对这个类目来说，最低证据集通常包括%s。没有这层资料，即使文字写得很好，也仍然只是内容练习，而不是可辩护的商业资产。\n\n"
-                    "一旦这些文件存在，同一篇文章就可以同时支持 SEO、支付审核、客服处理和内部培训。这才是值得追求的标准：不是装饰性文章，而是在争议、审核或审计要求举证时仍然讲得通。"
-                ) % evidence_text_zh(evidence_items),
-            },
-        ],
-        "conclusion": (
-            "A real article in this library should leave the reader with a practical standard: every public claim should map to an operating fact, "
-            "every policy promise should map to a support process, and every sensitive category should map to an evidence file. That is how a compliance "
-            "article becomes commercially useful.\n\n"
-            "For teams scaling cross-border traffic, the goal is not simply to sound safer. The goal is to publish a piece that can survive contact with "
-            "buyers, support tickets, payment reviewers, and internal training without collapsing into contradiction."
-        ),
-        "zhConclusion": (
-            "这篇文章最后应留下一个清晰标准：每一个公开主张都要对应一个运营事实，每一个政策承诺都要对应一个客服流程，每一个敏感类目都要对应一份证据文件。\n\n"
-            "这才会让文章从单薄说明变成真正的资产：当买家、支付团队或内部复核人员要求证明时，它仍然能够成立。"
-        ),
-        "faq": [
-            {
-                "question": "What usually triggers extra scrutiny in this category?",
-                "answer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
-                "zhQuestion": "这个类目通常为什么会触发额外审核？",
-                "zhAnswer": "额外审核通常来自产品文案、政策语言、客服消息和结账承诺之间的冲突信号。审核人员和客户会把这些层次互相对照，因此不一致往往比某一个词本身更危险。",
-            },
-            {
-                "question": "How should the article handle high-intent commercial keywords?",
-                "answer": "It should keep commercial relevance while tightening the implied promise. The article can discuss what buyers search for, but it should reframe those terms through operational wording, documented limits, and evidence-backed explanations.",
-                "zhQuestion": "文章应该如何处理高意图商业关键词？",
-                "zhAnswer": "文章应保留商业相关性，同时收紧关键词背后的隐含承诺。它可以讨论买家实际搜索的内容，但必须通过运营措辞、记录边界和证据说明重新框定这些词。",
-            },
-            {
-                "question": "What evidence should exist before traffic scales?",
-                "answer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
-                "zhQuestion": "放大流量前应该准备哪些证据？",
-                "zhAnswer": "最低证据包应覆盖政策截图、客服日志、履约记录，以及与该类目相关的订单追踪或产品表现证明。当争议、审核或审计到来时，这些文件能让文章保持可辩护。",
-            },
-        ],
-        "bodyMarkdown": "",
-        "zhBodyMarkdown": "",
-        "toc": [],
-    }
-
-
 def writer_agent(state: WorkflowState) -> Dict[str, Any]:
     revision_count = state.get("revision_count", 0)
     seed = state["seed"]
@@ -1600,85 +1283,86 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
         {"revision": revision_count},
     )
     safe_seed = sanitize_claim_text(seed) if revision_count > 0 else seed
-    article = build_fallback_article(state, safe_seed=safe_seed, revision_count=revision_count)
     llm = state.get("llm")
 
-    if state.get("use_llm") and llm and llm.available:
-        payload = {
-            "seed_keyword": safe_seed,
-            "content_mode": state.get("content_mode", "standard"),
-            "mode_contract": mode_contract(state.get("content_mode", "standard")),
-            "keyword_locale": state.get("locale", "zh"),
-            "keyword_category": state.get("keyword_category", ""),
-            "canonical_category": normalize_keyword_category(state.get("keyword_category"), state.get("profile", {}).get("category", "Payment Risk")),
-            "keyword_intent": state.get("keyword_intent", ""),
-            "research_data": state.get("research_data", ""),
-            "pain_points": state.get("pain_points", []),
-            "red_lines": state.get("redline_terms", []),
-            "safe_terms": state.get("safe_terms", []),
-            "evidence": state.get("evidence", []),
-            "review_feedback": state.get("review_feedback", ""),
-            "required_schema": {
-                "slug": "lowercase-ascii-hyphen-slug",
-                "contentMode": "standard|fact-source",
-                "title": "English title",
-                "zhTitle": "Chinese title",
-                "category": list(ALLOWED_CATEGORIES),
-                "market": "target market",
-                "riskLevel": list(ALLOWED_RISK_LEVELS),
-                "updatedAt": "YYYY-MM-DD",
-                "metaTitle": "SEO title under 80 chars",
-                "metaDescription": "SEO meta description under 180 chars",
-                "dek": "English deck under headline",
-                "zhDek": "Chinese deck under headline",
-                "summary": "English summary",
-                "zhSummary": "Chinese summary",
-                "introduction": "Two-paragraph English introduction",
-                "zhIntroduction": "Two-paragraph Chinese introduction",
-                "keyTakeaways": ["3-5 English bullets"],
-                "zhKeyTakeaways": ["3-5 Chinese bullets"],
-                "bodyMarkdown": "Optional. Prefer an empty string; the local renderer will assemble the final long-form markdown from sections, cards, FAQ, and conclusion.",
-                "zhBodyMarkdown": "Optional. Prefer an empty string; the local renderer will assemble the final localized markdown.",
-                "toc": [{"id": "heading-id", "label": "English heading", "zhLabel": "Chinese heading", "level": 2}],
-                "intelligenceCards": [
-                    {
-                        "label": "short card label",
-                        "zhLabel": "Chinese label",
-                        "finding": "extractable finding tied to the category and market",
-                        "zhFinding": "Chinese finding",
-                        "evidence": "supporting evidence or file class",
-                        "zhEvidence": "Chinese evidence",
-                        "action": "recommended operational response",
-                        "zhAction": "Chinese action",
-                        "severity": "Critical|High|Medium|Watch",
-                    }
-                ],
-                "faq": [{"question": "", "answer": "", "zhQuestion": "", "zhAnswer": ""}],
-                "relatedKeywords": ["keyword variants"],
-                "redlineTerms": ["terms"],
-                "sections": [{"heading": "", "zhHeading": "", "body": "", "zhBody": ""}],
-                "conclusion": "Two-paragraph English conclusion",
-                "zhConclusion": "Two-paragraph Chinese conclusion",
-            },
-        }
-        writer_prompt_file = "rewrite-system.md" if revision_count > 0 else "insight-agent-prompt.md"
-        writer_system_prompt = read_prompt_file(
-            writer_prompt_file,
-            "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. For content_mode=standard, produce an evergreen SEO long-form article. For content_mode=fact-source, produce a stricter evidence-backed fact-source article with core conclusion, scenario boundaries, before-after correction table, evidence package, human-confirmation boundary, and visual-ready structures. Return only JSON matching the required schema.",
+    if not state.get("use_llm") or not llm or not llm.available:
+        raise PipelineError("Writer Agent requires a configured LLM. Mock or local fallback article generation is disabled.")
+    payload = {
+        "seed_keyword": safe_seed,
+        "content_mode": state.get("content_mode", "standard"),
+        "mode_contract": mode_contract(state.get("content_mode", "standard")),
+        "keyword_locale": state.get("locale", "zh"),
+        "keyword_category": state.get("keyword_category", ""),
+        "canonical_category": normalize_keyword_category(state.get("keyword_category"), state.get("profile", {}).get("category", "Payment Risk")),
+        "keyword_intent": state.get("keyword_intent", ""),
+        "research_data": state.get("research_data", ""),
+        "pain_points": state.get("pain_points", []),
+        "red_lines": state.get("redline_terms", []),
+        "safe_terms": state.get("safe_terms", []),
+        "evidence": state.get("evidence", []),
+        "review_feedback": state.get("review_feedback", ""),
+        "required_schema": {
+            "slug": "lowercase-ascii-hyphen-slug",
+            "contentMode": "standard|fact-source",
+            "title": "English title",
+            "zhTitle": "Chinese title",
+            "category": list(ALLOWED_CATEGORIES),
+            "market": "target market",
+            "riskLevel": list(ALLOWED_RISK_LEVELS),
+            "updatedAt": "YYYY-MM-DD",
+            "metaTitle": "SEO title under 80 chars",
+            "metaDescription": "SEO meta description under 180 chars",
+            "dek": "English deck under headline",
+            "zhDek": "Chinese deck under headline",
+            "summary": "English summary",
+            "zhSummary": "Chinese summary",
+            "introduction": "Two-paragraph English introduction",
+            "zhIntroduction": "Two-paragraph Chinese introduction",
+            "keyTakeaways": ["3-5 English bullets"],
+            "zhKeyTakeaways": ["3-5 Chinese bullets"],
+            "bodyMarkdown": "Optional. Prefer an empty string; the local renderer will assemble the final long-form markdown from sections, cards, FAQ, and conclusion.",
+            "zhBodyMarkdown": "Optional. Prefer an empty string; the local renderer will assemble the final localized markdown.",
+            "toc": [{"id": "heading-id", "label": "English heading", "zhLabel": "Chinese heading", "level": 2}],
+            "intelligenceCards": [
+                {
+                    "label": "short card label",
+                    "zhLabel": "Chinese label",
+                    "finding": "extractable finding tied to the category and market",
+                    "zhFinding": "Chinese finding",
+                    "evidence": "supporting evidence or file class",
+                    "zhEvidence": "Chinese evidence",
+                    "action": "recommended operational response",
+                    "zhAction": "Chinese action",
+                    "severity": "Critical|High|Medium|Watch",
+                }
+            ],
+            "faq": [{"question": "", "answer": "", "zhQuestion": "", "zhAnswer": ""}],
+            "relatedKeywords": ["keyword variants"],
+            "redlineTerms": ["terms"],
+            "sections": [{"heading": "", "zhHeading": "", "body": "", "zhBody": ""}],
+            "conclusion": "Two-paragraph English conclusion",
+            "zhConclusion": "Two-paragraph Chinese conclusion",
+        },
+    }
+    writer_prompt_file = "rewrite-system.md" if revision_count > 0 else "insight-agent-prompt.md"
+    writer_system_prompt = read_prompt_file(
+        writer_prompt_file,
+        "You are writing a publishable SEO intelligence article for a cross-border compliance insights library. Do not write an internal framework, architecture note, brief, memo, or checklist. Write a polished long-form article in a restrained, authoritative consulting tone. For content_mode=standard, produce an evergreen SEO long-form article. For content_mode=fact-source, produce a stricter evidence-backed fact-source article with core conclusion, scenario boundaries, before-after correction table, evidence package, human-confirmation boundary, and visual-ready structures. Return only JSON matching the required schema.",
+    )
+    writer_system_prompt += (
+        "\n\nRuntime stability rule: keep the JSON compact. Do not generate the full bodyMarkdown or zhBodyMarkdown unless you can finish valid JSON without truncation. "
+        "It is acceptable, and preferred, to set bodyMarkdown and zhBodyMarkdown to empty strings. The local renderer will assemble the final markdown article from the developed sections, intelligenceCards, FAQ, keyTakeaways, introduction, and conclusion. "
+        "Each section body must still contain two developed paragraphs."
+    )
+    try:
+        article = llm.chat_json(
+            writer_system_prompt,
+            json.dumps(payload, ensure_ascii=False),
+            temperature=0.35,
         )
-        writer_system_prompt += (
-            "\n\nRuntime stability rule: keep the JSON compact. Do not generate the full bodyMarkdown or zhBodyMarkdown unless you can finish valid JSON without truncation. "
-            "It is acceptable, and preferred, to set bodyMarkdown and zhBodyMarkdown to empty strings. The local renderer will assemble the final markdown article from the developed sections, intelligenceCards, FAQ, keyTakeaways, introduction, and conclusion. "
-            "Each section body must still contain two developed paragraphs."
-        )
-        try:
-            article = llm.chat_json(
-                writer_system_prompt,
-                json.dumps(payload, ensure_ascii=False),
-                temperature=0.35,
-            )
-        except Exception as exc:
-            print("Writer LLM returned unusable JSON; using local structured fallback: %s" % exc)
+    except Exception as exc:
+        raise PipelineError("Writer Agent LLM returned unusable JSON. Local fallback article generation is disabled: %s" % exc)
+    require_llm_writer_shape(article)
     article = normalize_article(article, state)
 
     emit_progress(
@@ -1814,25 +1498,37 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
     )
     passed, findings, feedback = deterministic_review(state)
     llm = state.get("llm")
-    reviewer_warning = ""
-    if state.get("use_llm") and llm and llm.available and passed:
-        try:
-            reviewer_system_prompt = read_prompt_file(
-                "review-system.md",
-                "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. redlineTerms is a warning list and may contain prohibited phrases by design; do not reject the draft solely because the warning list names those phrases. Reject only when forbidden language or equivalent promises appear in the title, summary, or section bodies as public-facing copy. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
-            )
-            result = llm.chat_json(
-                reviewer_system_prompt,
-                json.dumps({"red_lines": state.get("redline_terms", []), "draft": state.get("article", {})}, ensure_ascii=False),
-                temperature=0.0,
-            )
-            if str(result.get("status", "")).upper() == "REJECT":
-                passed = False
-                findings = list(result.get("findings", [])) or ["llm reviewer rejected draft"]
-                feedback = str(result.get("feedback", "Rewrite with tighter compliance language."))
-        except Exception as exc:
-            reviewer_warning = "Remote reviewer unavailable; kept deterministic review result: %s" % exc
-            print(reviewer_warning)
+    if not state.get("use_llm") or not llm or not llm.available:
+        raise PipelineError("Reviewer Agent requires a configured LLM. Deterministic-only review mode is disabled.")
+    try:
+        reviewer_system_prompt = read_prompt_file(
+            "review-system.md",
+            "You are a cold compliance officer. Review the draft against red_lines, medical implications, payment overpromises, and AI-like generic marketing. redlineTerms is a warning list and may contain prohibited phrases by design; do not reject the draft solely because the warning list names those phrases. Reject only when forbidden language or equivalent promises appear in the title, summary, or section bodies as public-facing copy. Return JSON: {\"status\":\"PASS|REJECT\",\"findings\":[...],\"feedback\":\"...\"}.",
+        )
+        result = llm.chat_json(
+            reviewer_system_prompt,
+            json.dumps(
+                {
+                    "red_lines": state.get("redline_terms", []),
+                    "deterministic_review": {
+                        "passed": passed,
+                        "findings": findings,
+                        "feedback": feedback,
+                    },
+                    "draft": state.get("article", {}),
+                },
+                ensure_ascii=False,
+            ),
+            temperature=0.0,
+        )
+        llm_rejected = str(result.get("status", "")).upper() == "REJECT"
+        if llm_rejected:
+            passed = False
+            llm_findings = list(result.get("findings", [])) or ["llm reviewer rejected draft"]
+            findings = list(dict.fromkeys(findings + llm_findings))
+            feedback = str(result.get("feedback", "Rewrite with tighter compliance language."))
+    except Exception as exc:
+        raise PipelineError("Reviewer Agent LLM request failed. Deterministic-only review fallback is disabled: %s" % exc)
 
     revision_count = state.get("revision_count", 0)
     blocked = (not passed) and revision_count >= MAX_REVISIONS
@@ -1858,7 +1554,7 @@ def reviewer_agent(state: WorkflowState) -> Dict[str, Any]:
                 "findings": findings,
                 "blocked": blocked,
                 "feedback": "" if passed else feedback,
-                "warning": reviewer_warning,
+                "llm": True,
             },
         ),
     }
@@ -1870,6 +1566,41 @@ def route_after_review(state: WorkflowState) -> str:
     if state.get("blocked"):
         return "blocked"
     return "rewrite"
+
+
+def require_llm_writer_shape(article: Any) -> None:
+    if not isinstance(article, dict):
+        raise PipelineError("Writer Agent did not return a JSON object. Local article fallback generation is disabled.")
+    required_scalar_fields = [
+        "title",
+        "zhTitle",
+        "metaTitle",
+        "metaDescription",
+        "dek",
+        "zhDek",
+        "summary",
+        "zhSummary",
+        "introduction",
+        "zhIntroduction",
+        "conclusion",
+        "zhConclusion",
+    ]
+    missing = [field for field in required_scalar_fields if not first_string(article.get(field))]
+    required_list_fields = [
+        "keyTakeaways",
+        "zhKeyTakeaways",
+        "intelligenceCards",
+        "faq",
+        "relatedKeywords",
+        "redlineTerms",
+        "sections",
+    ]
+    for field in required_list_fields:
+        value = article.get(field)
+        if not isinstance(value, list) or len(value) == 0:
+            missing.append(field)
+    if missing:
+        raise PipelineError("Writer Agent omitted required article fields: %s. Local article fallback generation is disabled." % ", ".join(missing))
 
 
 def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[str, Any]:
@@ -2005,7 +1736,7 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
 
 def build_langgraph_app():
     if not LANGGRAPH_AVAILABLE:
-        return None
+        raise PipelineError("LangGraph is required. Compatibility fallback state-machine mode is disabled.")
     graph = StateGraph(WorkflowState)
     graph.add_node("researcher", researcher_agent)
     graph.add_node("writer", writer_agent)
@@ -2015,16 +1746,6 @@ def build_langgraph_app():
     graph.add_edge("writer", "reviewer")
     graph.add_conditional_edges("reviewer", route_after_review, {"rewrite": "writer", "final": END, "blocked": END})
     return graph.compile()
-
-
-def run_fallback_state_machine(initial_state: WorkflowState) -> WorkflowState:
-    state = dict(initial_state)
-    state.update(researcher_agent(state))
-    while True:
-        state.update(writer_agent(state))
-        state.update(reviewer_agent(state))
-        if route_after_review(state) in {"final", "blocked"}:
-            return state
 
 
 def run_workflow(
@@ -2061,15 +1782,9 @@ def run_workflow(
         "llm": llm,
     }
     app = build_langgraph_app()
-    if app is None:
-        state = run_fallback_state_machine(initial_state)
-        state["llm_provider"] = llm.provider if initial_state["use_llm"] else "rules"
-        state["llm_model"] = llm.model if initial_state["use_llm"] else "rules"
-        state["trace"] = append_trace(state, "Runtime", "used compatibility fallback because LangGraph is not installed", {"python": sys.version.split()[0], "llm": initial_state["use_llm"]})
-        return state
     state = app.invoke(initial_state)
-    state["llm_provider"] = llm.provider if initial_state["use_llm"] else "rules"
-    state["llm_model"] = llm.model if initial_state["use_llm"] else "rules"
+    state["llm_provider"] = llm.provider
+    state["llm_model"] = llm.model
     state["trace"] = append_trace(
         state,
         "Runtime",
@@ -2098,7 +1813,7 @@ def parse_args():
     parser.add_argument("--draft-dir", default="local-brain/drafts", help="Output directory for generated JSON drafts.")
     parser.add_argument("--audit-dir", default="local-brain/audits", help="Output directory for workflow audit traces.")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite an existing draft with the same slug.")
-    parser.add_argument("--no-llm", action="store_true", help="Deprecated. This pipeline requires LLM and will fail if this flag is used.")
+    parser.add_argument("--no-llm", action="store_true", help="Forbidden. This production line requires LLM execution.")
     return parser.parse_args()
 
 
@@ -2153,10 +1868,10 @@ def main():
                 "keyword_category": args.category,
                 "keyword_intent": args.intent,
                 "keyword_locale": args.locale,
-                "runtime": "langgraph" if LANGGRAPH_AVAILABLE else "fallback",
+                "runtime": "langgraph",
                 "llm_enabled": bool(state.get("use_llm")),
-                "llm_provider": state.get("llm_provider", "rules"),
-                "llm_model": state.get("llm_model", "rules"),
+                "llm_provider": state.get("llm_provider"),
+                "llm_model": state.get("llm_model"),
                 "profile": state.get("profile_key"),
                 "review_passed": state.get("review_passed"),
                 "review_findings": state.get("review_findings", []),
@@ -2175,8 +1890,8 @@ def main():
     emit_progress(args.seed, "Fail-Safe", "completed", "failsafe_completed", {"output": str(output_path), "audit": str(audit_path)})
     emit_progress(args.seed, "Pipeline", "completed", "pipeline_completed", {"output": str(output_path)})
     print("Local Brain draft generated:")
-    print("  runtime: %s" % ("LangGraph StateGraph" if LANGGRAPH_AVAILABLE else "compatibility fallback"))
-    print("  llm: %s" % ("enabled" if state.get("use_llm") else "disabled"))
+    print("  runtime: LangGraph StateGraph")
+    print("  llm: enabled")
     print("  seed: %s" % args.seed)
     print("  content_mode: %s" % article.get("contentMode"))
     print("  profile: %s" % state.get("profile_key"))
