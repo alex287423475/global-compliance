@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readLlmConfigBundle } from "../../../../../lib/local-brain-core";
 
 export const runtime = "nodejs";
 
@@ -60,7 +61,9 @@ async function testAnthropic(baseUrl: string, apiKey: string, model: string) {
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as Record<string, string>;
-  const apiKey = String(body.api_key || "").trim();
+  const role = String(body.role || "").trim() as "modelA" | "modelB" | "modelC";
+  const savedConfig = role ? readLlmConfigBundle()[role] : null;
+  const apiKey = String(body.api_key || savedConfig?.api_key || "").trim();
   const baseUrl = String(body.base_url || "").trim();
   const model = String(body.model || "").trim();
   const provider = String(body.provider || "").trim().toLowerCase();

@@ -542,6 +542,8 @@ export function LocalBrainDashboard() {
 
   async function saveConfig(role: AiRole) {
     const form = configForms[role];
+    const apiKey = apiKeys[role].trim();
+    const apiKeyForSave = apiKey && apiKey !== form.api_key_masked ? apiKey : "";
     setBusy(`config:${role}`);
     noticeClear();
     try {
@@ -550,7 +552,7 @@ export function LocalBrainDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, provider: form.provider, base_url: form.base_url, model: form.model, api_key: apiKeys[role] }),
+          body: JSON.stringify({ role, provider: form.provider, base_url: form.base_url, model: form.model, api_key: apiKeyForSave }),
         },
         "模型配置保存失败",
       );
@@ -567,6 +569,8 @@ export function LocalBrainDashboard() {
 
   async function testConfig(role: AiRole) {
     const form = configForms[role];
+    const apiKey = apiKeys[role].trim();
+    const apiKeyForTest = apiKey && apiKey !== form.api_key_masked ? apiKey : "";
     setBusy(`test:${role}`);
     noticeClear();
     try {
@@ -575,7 +579,7 @@ export function LocalBrainDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, provider: form.provider, base_url: form.base_url, model: form.model, api_key: apiKeys[role] }),
+          body: JSON.stringify({ role, provider: form.provider, base_url: form.base_url, model: form.model, api_key: apiKeyForTest }),
         },
         "模型测试失败",
       )) as AiTestResult;
@@ -1118,6 +1122,10 @@ export function LocalBrainDashboard() {
     updateConfig(role, { provider, base_url: defaults.baseUrl, model: defaults.model });
   }
 
+  function apiKeyDisplayValue(role: AiRole, form: AiConfig) {
+    return apiKeys[role] || (form.api_key_set ? form.api_key_masked : "");
+  }
+
   function toggleAllDrafts() {
     setSelectedDrafts((current) => {
       const next = { ...current };
@@ -1207,7 +1215,15 @@ export function LocalBrainDashboard() {
                     <input className={inputClass} value={form.model} onChange={(event) => updateConfig(role, { model: event.target.value })} />
                   </Field>
                   <Field label="API Key">
-                    <input className={inputClass} value={apiKeys[role]} onChange={(event) => setApiKeys((current) => ({ ...current, [role]: event.target.value }))} placeholder={form.api_key_set ? "留空则保留已保存密钥" : "必填"} />
+                    <input
+                      className={inputClass}
+                      value={apiKeyDisplayValue(role, form)}
+                      onChange={(event) => setApiKeys((current) => ({ ...current, [role]: event.target.value }))}
+                      onFocus={(event) => {
+                        if (!apiKeys[role] && form.api_key_set) event.currentTarget.select();
+                      }}
+                      placeholder="请输入 API Key"
+                    />
                   </Field>
                   <ActionButton busy={busy === `config:${role}`} label="保存" busyLabel="保存中..." onClick={() => void saveConfig(role)} />
                   <GhostButton disabled={busy === `test:${role}`} label={busy === `test:${role}` ? "测试中..." : "测试"} onClick={() => void testConfig(role)} />
