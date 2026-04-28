@@ -22,16 +22,26 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Global Bridge Compliance | Cross-Border Compliance Solutions",
+  title: "Global Bridge Compliance | PayPal, Stripe, Amazon POA & Cross-Border Risk Files",
   description:
-    "Global Bridge Compliance provides payment risk, market entry, crisis defense, IP response, capital-market, and B2B advisory document solutions for international clients.",
+    "Private compliance review, evidence intake, appeal files, and productized toolkits for PayPal and Stripe risk reviews, chargebacks, Amazon POA, market entry, IP defense, and cross-border B2B documents.",
+  keywords: [
+    "PayPal account review",
+    "Stripe appeal",
+    "chargeback evidence",
+    "Amazon POA",
+    "cross-border compliance",
+    "market entry compliance",
+    "IP takedown response",
+    "B2B export documents",
+  ],
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Global Bridge Compliance | Cross-Border Compliance Solutions",
+    title: "Global Bridge Compliance | PayPal, Stripe, Amazon POA & Cross-Border Risk Files",
     description:
-      "Payment risk, market entry, crisis defense, IP response, capital-market, and B2B advisory document solutions for international clients.",
+      "Private compliance review, evidence intake, appeal files, and productized toolkits for payment risk, marketplace appeals, market entry, IP defense, and cross-border B2B documents.",
     url: "/",
     siteName: "Global Bridge Compliance",
     locale: "en_US",

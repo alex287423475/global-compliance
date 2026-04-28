@@ -9,16 +9,50 @@ const content = {
     brand: "Global Bridge Compliance",
     navAssets: "Solutions",
     navProducts: "Toolkits",
-    navLibrary: "Library",
+    navLibrary: "Insights",
     navIntake: "Intake",
     navProcedure: "Procedure",
     navReview: "Private Review",
     eyebrow: "Cross-Border Compliance Intelligence",
-    heroTitle: "Resolve payment, market-entry, crisis, and capital-market compliance risk",
+    heroTitle: "Defend payment accounts, marketplace access, and cross-border evidence before the review clock expires",
     heroCopy:
-      "Global Bridge Compliance supports cross-border sellers, B2B exporters, SaaS teams, and capital-facing companies with compliance localization, evidence structuring, appeal files, and high-stakes business documents.",
-    requestAssessment: "Request Assessment",
-    viewAssets: "View Solutions",
+      "Global Bridge Compliance turns platform notices, policy files, dispute records, and commercial documents into controlled response packages for cross-border sellers, B2B exporters, SaaS teams, and capital-facing companies.",
+    requestAssessment: "Start Private Review",
+    viewAssets: "View Service Modules",
+    entryEyebrow: "Start Here",
+    entryTitle: "Choose the path that matches the risk clock",
+    entryCopy:
+      "A payment hold, an Amazon POA, a vendor file, and a digital toolkit request should not enter the same funnel. The homepage now routes each case by urgency, evidence burden, and delivery type.",
+    entryRoutes: [
+      {
+        title: "Private Diagnostic Review",
+        meta: "For urgent exposure",
+        copy: "Use when funds, listings, account access, regulator replies, or strategic documents need a human risk read before submission.",
+        href: "#checkout",
+        action: "Request review",
+      },
+      {
+        title: "Evidence Intake Forms",
+        meta: "For material collection",
+        copy: "Use structured intake forms for chargebacks, PayPal or Stripe account review, Amazon POA, IP defense, and other evidence-heavy cases.",
+        href: "/intake",
+        action: "Open intake",
+      },
+      {
+        title: "Compliance Toolkits",
+        meta: "For repeatable execution",
+        copy: "Request reusable redline terms, safer language, evidence checklists, response frameworks, and internal SOP files.",
+        href: "#products",
+        action: "View toolkits",
+      },
+      {
+        title: "Compliance Intelligence Library",
+        meta: "For research and SEO traffic",
+        copy: "Browse long-form compliance intelligence on payment risk, marketplace appeals, supply-chain declarations, and platform language exposure.",
+        href: "/insights",
+        action: "Read insights",
+      },
+    ],
     riskItems: [
       {
         label: "Payment & Capital",
@@ -198,11 +232,45 @@ const content = {
     navProcedure: "交付程序",
     navReview: "私密评估",
     eyebrow: "Cross-Border Compliance Intelligence",
-    heroTitle: "处理支付、市场准入、危机公关与资本合规风险",
+    heroTitle: "在审核倒计时前，重组支付账户、平台准入与跨境证据链",
     heroCopy:
-      "全球博译合规为跨境卖家、B2B 出口企业、SaaS 团队和资本运作项目提供合规本地化、证据重组、申诉文件和高风险商业文书支持。",
-    requestAssessment: "预约评估",
-    viewAssets: "查看方案",
+      "全球博译合规把平台通知、政策文件、争议记录和商业文书，重组为可提交、可审阅、可追踪的跨境回应文件包，服务跨境卖家、B2B 出口企业、SaaS 团队和资本运作项目。",
+    requestAssessment: "启动私密评估",
+    viewAssets: "查看服务模块",
+    entryEyebrow: "Start Here",
+    entryTitle: "按风险倒计时选择入口",
+    entryCopy:
+      "支付冻结、Amazon POA、供应商文件和数字工具包请求，不应该进入同一个表单。首页按紧急程度、证据负担和交付类型分流。",
+    entryRoutes: [
+      {
+        title: "私密合规诊断",
+        meta: "适合紧急暴露风险",
+        copy: "资金、链接、账户权限、监管回复或战略文书需要提交前风险判断时，从这里开始。",
+        href: "#checkout",
+        action: "预约评估",
+      },
+      {
+        title: "证据资料收集表",
+        meta: "适合材料整理",
+        copy: "拒付、PayPal/Stripe 账户审核、Amazon POA、IP 防御等证据密集型案件，使用专项表单收集材料。",
+        href: "/intake",
+        action: "打开资料表",
+      },
+      {
+        title: "合规工具包",
+        meta: "适合复用执行",
+        copy: "申请可复用的红线词、安全表达、证据清单、回应框架和内部 SOP 文件。",
+        href: "#products",
+        action: "查看工具包",
+      },
+      {
+        title: "合规情报库",
+        meta: "适合研究与自然流量",
+        copy: "阅读支付风控、平台申诉、供应链声明和平台语言风险相关的深度合规情报文章。",
+        href: "/insights",
+        action: "阅读情报",
+      },
+    ],
     riskItems: [
       {
         label: "支付与资本",
@@ -408,6 +476,7 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50 text-blue-950">
       <Header locale={locale} setLocale={setLocale} t={t} />
       <Hero t={t} />
+      <EntryRoutes t={t} />
       <RiskPanel t={t} />
       <AudienceBand t={t} />
       <AuthorityGrid t={t} />
@@ -523,6 +592,47 @@ function Hero({ t }: { t: typeof content.en }) {
             <p className="mt-4 max-w-xs text-sm leading-6 text-slate-600">{item.copy}</p>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function EntryRoutes({ t }: { t: typeof content.en }) {
+  const routes = t.entryRoutes as Array<{ title: string; meta: string; copy: string; href: string; action: string }>;
+
+  return (
+    <section className="mx-auto mb-24 max-w-7xl px-6 lg:px-10">
+      <div className="grid gap-10 border-y border-blue-900/10 py-14 lg:grid-cols-[0.58fr_1fr]">
+        <div className="max-w-xl">
+          <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
+            {String(t.entryEyebrow)}
+          </p>
+          <h2 className="font-[family-name:var(--font-serif)] text-4xl font-medium leading-tight text-blue-950 md:text-5xl">
+            {String(t.entryTitle)}
+          </h2>
+          <p className="mt-6 text-sm leading-7 text-slate-600">
+            {String(t.entryCopy)}
+          </p>
+        </div>
+
+        <div className="grid border border-blue-900/10 bg-white md:grid-cols-2">
+          {routes.map((route) => (
+            <a
+              className="group min-h-60 border-b border-blue-900/10 p-7 transition-colors duration-300 hover:bg-slate-50 md:border-r md:[&:nth-child(2n)]:border-r-0"
+              href={route.href}
+              key={route.title}
+            >
+              <p className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.16em] text-red-800">
+                {route.meta}
+              </p>
+              <h3 className="mt-7 text-xl font-bold leading-7 text-blue-950">{route.title}</h3>
+              <p className="mt-4 text-sm leading-7 text-slate-600">{route.copy}</p>
+              <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-800 transition-colors duration-300 group-hover:text-blue-950">
+                {route.action}
+              </p>
+            </a>
+          ))}
+        </div>
       </div>
     </section>
   );
