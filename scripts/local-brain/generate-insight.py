@@ -592,6 +592,44 @@ def zh_or(value: Any, fallback: str) -> str:
     return text
 
 
+ENGLISH_TOPIC_OVERRIDES = {
+    "listing": "Amazon listing SEO localization",
+    "listing优化": "Amazon listing SEO localization",
+    "amazon-appeal": "Amazon appeal letter and POA evidence",
+    "亚马逊申诉信": "Amazon appeal letter and POA evidence",
+    "paypal-chargeback-compliance-checklist": "PayPal chargeback evidence checklist",
+}
+
+
+def english_topic_label(seed: Any, slug: str = "") -> str:
+    seed_text = first_string(seed).strip()
+    slug_text = first_string(slug).strip()
+    for key in [slug_text, seed_text, seed_text.lower()]:
+        if key and key in ENGLISH_TOPIC_OVERRIDES:
+            return ENGLISH_TOPIC_OVERRIDES[key]
+    if seed_text and cjk_count(seed_text) == 0:
+        return title_case_seed(seed_text)
+    if slug_text:
+        return title_case_seed(slug_text.replace("-", " "))
+    return "cross-border compliance content"
+
+
+def chinese_topic_label(seed: Any, fallback: str = "该类目") -> str:
+    seed_text = first_string(seed).strip()
+    if seed_text and cjk_count(seed_text) > 0:
+        return seed_text
+    return fallback
+
+
+def en_or(value: Any, fallback: str, limit: Optional[int] = None) -> str:
+    text = articleize_text(first_string(value, fallback))
+    if not text or cjk_count(text) > 0:
+        text = articleize_text(fallback)
+    if limit:
+        text = text[:limit].rstrip()
+    return text
+
+
 def evidence_text_zh(items: List[str]) -> str:
     return "、".join(first_string(item) for item in items if first_string(item)) or "政策截图、客服记录、履约记录和订单追踪证据"
 
@@ -658,10 +696,12 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     slug_override = first_string(state.get("slug_override"))
 
     normalized["slug"] = slugify(slug_override or first_string(normalized.get("slug")) or seed + " compliance article")
-    normalized["title"] = articleize_text(
-        first_string(normalized.get("title"), "%s cross-border compliance article" % title_case_seed(seed))
-    )
-    normalized["zhTitle"] = first_string(normalized.get("zhTitle"), normalized["title"])
+    topic_en = english_topic_label(seed, normalized["slug"])
+    topic_zh = chinese_topic_label(seed, "该类目")
+    title_fallback = "%s compliance and evidence guide" % title_case_seed(topic_en)
+    zh_title_fallback = "%s合规风险与证据准备指南" % topic_zh
+    normalized["title"] = en_or(normalized.get("title"), title_fallback, 96)
+    normalized["zhTitle"] = zh_or(normalized.get("zhTitle"), zh_title_fallback)
     normalized["category"] = normalize_keyword_category(
         state.get("keyword_category") or normalized.get("category"),
         profile.get("category", "Payment Risk"),
@@ -673,28 +713,23 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
     normalized["updatedAt"] = dt.date.today().isoformat()
     normalized["contentMode"] = content_mode
 
-    normalized["metaTitle"] = first_string(normalized.get("metaTitle"), normalized["title"])[:80]
-    normalized["metaDescription"] = articleize_text(
-        first_string(
-            normalized.get("metaDescription"),
-            "Operational guidance for cross-border teams that need safer claims, clearer policy language, and stronger evidence files before payment review, disputes, or platform scrutiny.",
-        )
-    )[:180]
-    normalized["summary"] = articleize_text(
-        first_string(
-            normalized.get("summary"),
-            "A publishable compliance analysis for teams preparing SEO wording, policy pages, evidence files, and review-ready explanations.",
-        )
+    normalized["metaTitle"] = en_or(normalized.get("metaTitle"), normalized["title"], 80)
+    normalized["metaDescription"] = en_or(
+        normalized.get("metaDescription"),
+        "A long-form compliance article on safer claims, policy wording, support boundaries, and evidence files for %s in %s." % (topic_en, normalized["market"]),
+        180,
+    )
+    normalized["summary"] = en_or(
+        normalized.get("summary"),
+        "A publishable compliance analysis for %s teams preparing SEO wording, policy pages, evidence files, and review-ready explanations." % topic_en,
     )
     normalized["zhSummary"] = zh_or(
         normalized.get("zhSummary"),
         "面向出海团队的合规情报文章，用于梳理页面措辞、政策页面、证据文件和审核说明之间的风险边界。",
     )
-    normalized["dek"] = articleize_text(
-        first_string(
-            normalized.get("dek"),
-            "What cross-border sellers need to fix in product language, policy pages, and support records before this category attracts avoidable scrutiny.",
-        )
+    normalized["dek"] = en_or(
+        normalized.get("dek"),
+        "What cross-border teams need to fix in product language, policy pages, and support records before %s attracts avoidable scrutiny." % topic_en,
     )
     normalized["zhDek"] = zh_or(
         normalized.get("zhDek"),
@@ -1365,7 +1400,9 @@ def researcher_agent(state: WorkflowState) -> Dict[str, Any]:
 def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count: int) -> Dict[str, Any]:
     profile = state["profile"]
     market = profile.get("market", "North America")
-    seed_title = title_case_seed(safe_seed)
+    slug_override = first_string(state.get("slug_override"))
+    seed_title = title_case_seed(english_topic_label(safe_seed, slug_override))
+    seed_zh = chinese_topic_label(safe_seed, "该类目")
     slug = slugify(safe_seed + " compliance guide")
     evidence_items = state.get("evidence", [])[:5]
     evidence_text = ", ".join(evidence_items) if evidence_items else "policy screenshots, support logs, fulfillment records, and order tracking evidence"
@@ -1878,6 +1915,12 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
         errors.append("category is not allowed: %s" % article.get("category"))
     if article.get("riskLevel") not in ALLOWED_RISK_LEVELS:
         errors.append("riskLevel must be Critical, High, or Medium")
+    for field in ["title", "metaTitle", "metaDescription", "dek", "summary", "introduction", "conclusion"]:
+        if cjk_count(article.get(field)) > 0:
+            errors.append("%s must not contain Chinese text; keep English and Chinese fields separated" % field)
+    for field in ["zhTitle", "zhDek", "zhSummary", "zhIntroduction", "zhConclusion"]:
+        if looks_english_dominant(article.get(field)):
+            errors.append("%s is English-dominant; keep Chinese and English fields separated" % field)
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", article.get("updatedAt", "")):
         errors.append("updatedAt must use YYYY-MM-DD")
     if not isinstance(article.get("redlineTerms"), list) or len(article.get("redlineTerms", [])) < 4:

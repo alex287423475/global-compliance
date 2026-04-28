@@ -98,6 +98,18 @@ export function validateInsight(article) {
     errors.push("riskLevel must be Critical, High, or Medium");
   }
 
+  for (const field of ["title", "metaTitle", "metaDescription", "dek", "summary", "introduction", "conclusion"]) {
+    if (countCjk(article[field]) > 0) {
+      errors.push(`${field} must not contain Chinese text; keep English and Chinese fields separated`);
+    }
+  }
+
+  for (const field of ["zhTitle", "zhDek", "zhSummary", "zhIntroduction", "zhConclusion"]) {
+    if (isEnglishDominant(article[field])) {
+      errors.push(`${field} is English-dominant; keep Chinese and English fields separated`);
+    }
+  }
+
   if (article.updatedAt && !/^\d{4}-\d{2}-\d{2}$/.test(article.updatedAt)) {
     errors.push("updatedAt must use YYYY-MM-DD format");
   }

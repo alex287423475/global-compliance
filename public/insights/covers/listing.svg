@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="What cross-border sellers should fix before scaling Listing优化">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Listing Optimization: Balancing Conversion and Compliance">
   <rect width="1600" height="900" fill="#f8fafc"/>
   <rect x="64" y="64" width="1472" height="772" fill="#ffffff" stroke="#dbe4f0" stroke-width="2"/>
   <rect x="64" y="64" width="1472" height="94" fill="#172554"/>
@@ -7,16 +7,15 @@
   <text x="1330" y="123" fill="#cbd5e1" font-family="JetBrains Mono, Consolas, monospace" font-size="22" text-anchor="end">2026-04-28</text>
   <line x1="104" y1="235" x2="1496" y2="235" stroke="#dbe4f0" stroke-width="2"/>
   <text x="104" y="214" fill="#1d4ed8" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="7">COMPLIANCE INTELLIGENCE</text>
-  <text x="104" y="326" fill="#172554" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-weight="600">What cross-border sellers should fix</text>
-  <text x="104" y="402" fill="#172554" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-weight="600">before scaling Listing优化</text>
-  <rect x="104" y="590" width="8" height="126" fill="#991b1b"/>
-  <text x="136" y="618" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="26">A publishable intelligence article on the claims, policy wording,</text>
-  <text x="136" y="652" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="26">support boundaries, and evidence files that matter before this category</text>
-  <text x="136" y="686" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="26">attracts avoidable review.</text>
+  <text x="104" y="326" fill="#172554" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-weight="600">Listing Optimization: Balancing</text>
+  <text x="104" y="402" fill="#172554" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-weight="600">Conversion and Compliance</text>
+  <rect x="104" y="590" width="8" height="126" fill="#172554"/>
+  <text x="136" y="618" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="26">Practical guidance on writing product descriptions, refund policies, and</text>
+  <text x="136" y="652" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="26">evidence preparation to reduce risk.</text>
   <rect x="1038" y="300" width="370" height="370" fill="#f8fafc" stroke="#dbe4f0" stroke-width="2"/>
   <text x="1223" y="440" fill="#172554" font-family="Georgia, 'Times New Roman', serif" font-size="90" font-weight="600" text-anchor="middle">DP</text>
-  <line x1="1098" y1="490" x2="1348" y2="490" stroke="#991b1b" stroke-width="3"/>
-  <text x="1223" y="548" fill="#475569" font-family="JetBrains Mono, Consolas, monospace" font-size="25" text-anchor="middle">North America</text>
-  <text x="1223" y="596" fill="#991b1b" font-family="JetBrains Mono, Consolas, monospace" font-size="25" font-weight="700" text-anchor="middle">CRITICAL</text>
+  <line x1="1098" y1="490" x2="1348" y2="490" stroke="#172554" stroke-width="3"/>
+  <text x="1223" y="548" fill="#475569" font-family="JetBrains Mono, Consolas, monospace" font-size="25" text-anchor="middle">global</text>
+  <text x="1223" y="596" fill="#172554" font-family="JetBrains Mono, Consolas, monospace" font-size="25" font-weight="700" text-anchor="middle">MEDIUM</text>
   <text x="104" y="780" fill="#172554" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="6">QQBYTRAN.COM / INSIGHTS</text>
 </svg>
