@@ -298,6 +298,41 @@ def fact_source_blocks(article: Dict[str, Any], state: WorkflowState, locale: st
         redlines = ["guaranteed approval", "we did nothing wrong", "no chargeback risk"]
 
     if locale == "zh":
+        rows = [
+            "## 核心结论",
+            "",
+            "这是一篇事实源型文章。它必须先回答搜索意图，再把判断边界、证据资料包和人工确认点拆开，避免把未经确认的事实写成确定性结论。",
+            "",
+            "## 适用场景 / 不适用场景",
+            "",
+            "| 场景 | 是否适用 | 判断标准 |",
+            "| --- | --- | --- |",
+            "| 已收到平台通知、支付审核或客户争议 | 适用 | 可以围绕通知、订单、截图和沟通记录重构证据语境 |",
+            "| 只是想写泛营销介绍页 | 不适用 | 应改用 standard 模式，避免把事实源文章写成泛营销页 |",
+            "| 需要提交正式申诉或政策解释 | 适用 | 必须由人工确认事实时间线和材料真实性 |",
+            "",
+            "## 修正前后对照表",
+            "",
+            "| 高风险表达 | 可能被如何理解 | 建议替代表达 |",
+            "| --- | --- | --- |",
+        ]
+        for term in redlines[:3]:
+            rows.append("| %s | 缺少证据边界，或带有不可控结果承诺 | 改写为已确认事实、流程改进和证据资料说明 |" % term)
+        rows.extend(
+            [
+                "",
+                "## 证据资料包",
+                "",
+                "\n".join("- %s" % item for item in evidence_items),
+                "",
+                "## 人工确认边界",
+                "",
+                "涉及具体账号通知、订单事实、供应商材料、客户沟通记录和最终提交版本时，必须由人工复核。系统可以辅助重构表达，但不能替代事实确认。",
+            ]
+        )
+        return "\n".join(rows)
+
+    if locale == "zh":
         scenario = [
             "## 核心结论",
             "",
@@ -406,7 +441,8 @@ def build_markdown_article(
     if introduction:
         parts.append(introduction.strip())
     if takeaways:
-        parts.append("## Key Takeaways\n\n" + "\n".join("- %s" % first_string(item) for item in takeaways[:5] if first_string(item)))
+        takeaways_title = "## Key Takeaways" if locale == "en" else "## 核心要点"
+        parts.append(takeaways_title + "\n\n" + "\n".join("- %s" % first_string(item) for item in takeaways[:5] if first_string(item)))
     fact_blocks = fact_source_blocks(article, state, locale)
     if fact_blocks:
         parts.append(fact_blocks)
@@ -431,9 +467,9 @@ def build_markdown_article(
                     )
         else:
             table_lines = [
-                "## Intelligence Card Summary",
+                "## 情报卡摘要",
                 "",
-                "| Signal | Evidence | Operational Response |",
+                "| 风险信号 | 证据依据 | 操作响应 |",
                 "| --- | --- | --- |",
             ]
             for card in cards[:4]:
@@ -453,7 +489,7 @@ def build_markdown_article(
         if heading and body:
             parts.append(section_markdown(heading, body))
     if faq:
-        faq_parts = ["## FAQ"]
+        faq_parts = ["## FAQ" if locale == "en" else "## 常见问题"]
         for item in faq[:5]:
             question = first_string(item.get("question" if locale == "en" else "zhQuestion"))
             answer = first_string(item.get("answer" if locale == "en" else "zhAnswer"))
@@ -461,18 +497,20 @@ def build_markdown_article(
                 faq_parts.append("### %s\n\n%s" % (question, answer))
         parts.append("\n\n".join(faq_parts))
     if conclusion:
-        parts.append("## Conclusion\n\n%s" % conclusion.strip())
+        conclusion_title = "## Conclusion" if locale == "en" else "## 结论"
+        parts.append("%s\n\n%s" % (conclusion_title, conclusion.strip()))
 
     markdown = "\n\n".join(part.strip() for part in parts if part.strip())
     warning_terms = article.get("redlineTerms", [])
     if isinstance(warning_terms, list) and warning_terms:
         warning_block = "\n".join("- %s" % first_string(term) for term in warning_terms[:6] if first_string(term))
         if warning_block:
-            markdown += "\n\n## Redline Watchlist\n\n" + warning_block
+            warning_title = "## Redline Watchlist" if locale == "en" else "## 红线观察清单"
+            markdown += "\n\n%s\n\n%s" % (warning_title, warning_block)
     if locale == "en":
         cta = "If your team needs this risk mapped against its own checkout, policy stack, or evidence files, request a private diagnostic review before scaling traffic."
     else:
-        cta = "If your team needs this risk mapped against its own materials, request a private diagnostic review before scaling traffic."
+        cta = "如果你的团队需要把这些风险映射到自己的政策页面、证据资料或申诉材料中，请在放大流量前预约一次私密诊断。"
     markdown += "\n\n> %s" % cta
     return markdown.strip()
 
@@ -528,6 +566,41 @@ def first_string(value: Any, fallback: str = "") -> str:
     if value is None:
         return fallback
     return str(value)
+
+
+def cjk_count(value: Any) -> int:
+    return len(re.findall(r"[\u4e00-\u9fff]", first_string(value)))
+
+
+def latin_word_count(value: Any) -> int:
+    return len(re.findall(r"\b[A-Za-z][A-Za-z'-]{2,}\b", first_string(value)))
+
+
+def looks_english_dominant(value: Any) -> bool:
+    text = first_string(value)
+    if not text.strip():
+        return False
+    latin_words = latin_word_count(text)
+    cjk_chars = cjk_count(text)
+    return latin_words >= 12 and latin_words > max(8, cjk_chars // 2)
+
+
+def zh_or(value: Any, fallback: str) -> str:
+    text = first_string(value).strip()
+    if not text or looks_english_dominant(text):
+        return fallback
+    return text
+
+
+def evidence_text_zh(items: List[str]) -> str:
+    return "、".join(first_string(item) for item in items if first_string(item)) or "政策截图、客服记录、履约记录和订单追踪证据"
+
+
+def zh_long(value: Any, fallback: str) -> str:
+    text = first_string(value).strip()
+    if not text or looks_english_dominant(text):
+        return fallback
+    return paragraphize(text, fallback)
 
 
 def normalize_keyword_category(value: Any, fallback: str = "Payment Risk") -> str:
@@ -613,14 +686,20 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
             "A publishable compliance analysis for teams preparing SEO wording, policy pages, evidence files, and review-ready explanations.",
         )
     )
-    normalized["zhSummary"] = first_string(normalized.get("zhSummary"), normalized["summary"])
+    normalized["zhSummary"] = zh_or(
+        normalized.get("zhSummary"),
+        "面向出海团队的合规情报文章，用于梳理页面措辞、政策页面、证据文件和审核说明之间的风险边界。",
+    )
     normalized["dek"] = articleize_text(
         first_string(
             normalized.get("dek"),
             "What cross-border sellers need to fix in product language, policy pages, and support records before this category attracts avoidable scrutiny.",
         )
     )
-    normalized["zhDek"] = first_string(normalized.get("zhDek"), normalized["dek"])
+    normalized["zhDek"] = zh_or(
+        normalized.get("zhDek"),
+        "在该类目引发平台审核、支付审查或客户争议之前，出海团队需要先校准产品表达、政策页面、客服记录和证据资料。",
+    )
     normalized["introduction"] = paragraphize(
         first_string(
             normalized.get("introduction"),
@@ -628,7 +707,10 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
         ),
         "Instead of treating compliance as a final proofreading step, the better approach is to use the article itself as an operating map: what language belongs on the page, what claims must stay internal, and what evidence needs to exist before sales volume increases.",
     )
-    normalized["zhIntroduction"] = first_string(normalized.get("zhIntroduction"), normalized["introduction"])
+    normalized["zhIntroduction"] = zh_long(
+        normalized.get("zhIntroduction"),
+        "很多合规风险并不是从某一个禁用词开始，而是从页面承诺、支付措辞、退款预期和客服记录之间的不一致开始累积。\n\n一篇可发布的合规文章应当帮助运营者看清审核从哪里开始、哪些公开表达会制造摩擦，以及在争议、支付审核或平台检查到来之前，哪些证据资料必须已经存在。",
+    )
 
     state_redlines = [first_string(item) for item in state.get("redline_terms", []) if first_string(item)]
     redlines = normalized.get("redlineTerms", [])
@@ -665,7 +747,11 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
         zh_takeaways = []
     normalized["zhKeyTakeaways"] = [first_string(item) for item in zh_takeaways if first_string(item)]
     if len(normalized["zhKeyTakeaways"]) < 3:
-        normalized["zhKeyTakeaways"] = list(normalized["keyTakeaways"])
+        normalized["zhKeyTakeaways"] = [
+            "公开页面应描述可验证的运营边界，而不是承诺不可控结果。",
+            "政策页面必须与真实退款处理、证据要求和客服响应窗口保持一致。",
+            "只有截图、日志和订单记录提前存在，类目页面才更容易在审核和争议中自洽。",
+        ]
 
     cards = normalized.get("intelligenceCards", [])
     if not isinstance(cards, list):
@@ -748,6 +834,15 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
                 "severity": "Medium",
             },
         ]
+    for index, card in enumerate(cleaned_cards):
+        if looks_english_dominant(card.get("zhLabel")):
+            card["zhLabel"] = ["主张边界", "证据缺口", "客服一致性", "风险信号", "操作边界", "复核节点"][min(index, 5)]
+        if looks_english_dominant(card.get("zhFinding")):
+            card["zhFinding"] = "该风险信号需要结合具体通知、政策页面、订单记录和客服历史确认，不能直接按英文结论发布。"
+        if looks_english_dominant(card.get("zhEvidence")):
+            card["zhEvidence"] = "发布前应核对源文件、截图、时间戳和运营记录，确保判断有证据支撑。"
+        if looks_english_dominant(card.get("zhAction")):
+            card["zhAction"] = "将该发现转化为页面措辞修正、证据清单和人工复核事项。"
     normalized["intelligenceCards"] = cleaned_cards[:6]
 
     sections = normalized.get("sections", [])
@@ -787,6 +882,25 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
             if len(zh_body) < 140 or "\n\n" not in zh_body:
                 fallback_zh_body = first_string(fallback_sections[min(index, len(fallback_sections) - 1)].get("zhBody"))
                 section["zhBody"] = paragraphize("%s\n\n%s" % (zh_body, fallback_zh_body))
+    zh_section_headings = [
+        "为什么审核压力通常早于卖家察觉",
+        "哪些主张不应该出现在公开文章中",
+        "一篇可读文章会暴露怎样的真实客服体系",
+        "哪些证据文件能把文章变成运营资产",
+        "如何在搜索意图和合规边界之间保持平衡",
+        "发布前必须人工确认哪些事实",
+    ]
+    zh_section_bodies = [
+        "真正的风险往往不是某一个词，而是产品承诺、退款预期、交付说明和运营边界之间逐渐发生冲突。文章需要解释这种冲突如何被平台审核、支付审查或客户争议放大。\n\n因此，中文正文必须像一篇可阅读的专业文章，而不是英文内部提示词的翻译残留。它应当先说明业务问题，再把主张风险、政策风险和证据风险逐层展开。",
+        "高意图关键词仍然重要，但它不能把页面推向不可验证的承诺。文章可以解释红线问题，也可以说明为什么某些表达危险，但不能把这些词当作标题、政策页或结账文案中的可用措辞。\n\n更稳妥的写法，是用可验证的流程、支持窗口、退款边界和资料清单来承接商业意图，让内容既能获取搜索流量，也不会制造新的审核风险。",
+        "一篇强文章不只是改几个形容词。它要让产品页、FAQ、退款政策、履约说明和客服回复描述同一个运营现实。读者读完后，应能理解产品能做什么、不能做什么、团队如何响应，以及哪些承诺可以被书面记录支撑。\n\n这也是许多生成稿失败的地方：文字看似流畅，却无法落到客服行为和证据资料上。可发布文章必须补上这个缺口。",
+        "文章只有被证据资料支撑时，才会从内容练习变成运营资产。最低资料集通常包括政策截图、客服记录、履约记录、订单追踪证据和平台通知。\n\n当这些文件存在后，同一篇文章才能同时服务 SEO、支付审核、客服处理和内部培训，而不是在争议或复核到来时变成无法解释的营销文本。",
+    ]
+    for index, section in enumerate(cleaned_sections):
+        if looks_english_dominant(section.get("zhHeading")):
+            section["zhHeading"] = zh_section_headings[min(index, len(zh_section_headings) - 1)]
+        if looks_english_dominant(section.get("zhBody")):
+            section["zhBody"] = zh_section_bodies[min(index, len(zh_section_bodies) - 1)]
     normalized["sections"] = cleaned_sections
 
     normalized["conclusion"] = paragraphize(
@@ -796,7 +910,10 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
         ),
         "That is the standard a publishable insight article should meet: not louder language, but tighter alignment between what the market reads, what support can prove, and what the business is actually prepared to deliver.",
     )
-    normalized["zhConclusion"] = first_string(normalized.get("zhConclusion"), normalized["conclusion"])
+    normalized["zhConclusion"] = zh_long(
+        normalized.get("zhConclusion"),
+        "对出海团队来说，目标不是让表达听起来更激进，而是让每一个公开主张都容易解释、容易举证，并且在支付团队、平台审核或客户争议要求证明时仍然站得住。\n\n当产品文案、政策语言和客服记录描述同一个运营现实时，这个类目才更容易在不制造额外合规摩擦的前提下获得增长。",
+    )
 
     related_keywords = normalized.get("relatedKeywords", [])
     if not isinstance(related_keywords, list):
@@ -825,8 +942,8 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
                 {
                     "question": question,
                     "answer": answer,
-                    "zhQuestion": first_string(item.get("zhQuestion"), question),
-                    "zhAnswer": first_string(item.get("zhAnswer"), answer),
+                    "zhQuestion": zh_or(item.get("zhQuestion"), "这个类目通常为什么会触发额外审核？"),
+                    "zhAnswer": zh_long(item.get("zhAnswer"), "额外审核通常来自产品文案、政策语言、客服消息和结账承诺之间的冲突。风险不只是某一个词，而是业务无法用证据完整解释的一组承诺。"),
                 }
             )
     if len(cleaned_faq) < 3:
@@ -834,22 +951,57 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
             {
                 "question": "What usually triggers extra scrutiny in this category?",
                 "answer": "Scrutiny usually builds when product claims, policy wording, and support messages describe different realities. The risk is not a single phrase by itself, but the pattern of promises the business cannot fully evidence once a payment review, platform escalation, or customer dispute arrives.",
-                "zhQuestion": "What usually triggers extra scrutiny in this category?",
-                "zhAnswer": "Scrutiny usually builds when product claims, policy wording, and support messages describe different realities. The risk is not a single phrase by itself, but the pattern of promises the business cannot fully evidence once a payment review, platform escalation, or customer dispute arrives.",
+                "zhQuestion": "这个类目通常为什么会触发额外审核？",
+                "zhAnswer": "额外审核通常来自产品文案、政策语言和客服消息描述了不同的运营现实。风险不只是某一个词，而是当支付审核、平台升级或客户争议出现时，企业无法完整举证的一组承诺。",
             },
             {
                 "question": "What should a compliant article help the operator prepare?",
                 "answer": "It should help the operator align SEO copy, policy pages, refund handling language, support windows, and evidence files. A useful article is not only readable; it also maps directly to the records and workflows the team will rely on during review.",
-                "zhQuestion": "What should a compliant article help the operator prepare?",
-                "zhAnswer": "It should help the operator align SEO copy, policy pages, refund handling language, support windows, and evidence files. A useful article is not only readable; it also maps directly to the records and workflows the team will rely on during review.",
+                "zhQuestion": "一篇合规文章应该帮助运营者准备什么？",
+                "zhAnswer": "它应帮助运营者校准 SEO 文案、政策页面、退款处理语言、客服窗口和证据文件。真正有用的文章不只是可读，还能映射到团队在审核中会依赖的记录和流程。",
             },
             {
                 "question": "Why is evidence preparation part of SEO content quality here?",
                 "answer": "Because the page will eventually be tested by reality. If the article implies a cleaner process or a broader claim than the business can prove, the content may attract traffic but it also raises dispute and review risk. Evidence keeps the article commercially usable.",
-                "zhQuestion": "Why is evidence preparation part of SEO content quality here?",
-                "zhAnswer": "Because the page will eventually be tested by reality. If the article implies a cleaner process or a broader claim than the business can prove, the content may attract traffic but it also raises dispute and review risk. Evidence keeps the article commercially usable.",
+                "zhQuestion": "为什么证据准备也是 SEO 内容质量的一部分？",
+                "zhAnswer": "因为页面最终会被真实运营检验。如果文章暗示的流程比企业能证明的更干净，或主张比证据更宽，内容可能带来流量，也会提高争议和审核风险。证据让文章保持商业可用。",
             },
         ]
+    english_faq_fallbacks = [
+        {
+            "question": "What usually triggers extra scrutiny in this category?",
+            "answer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
+            "zhQuestion": "这个类目通常为什么会触发额外审核？",
+            "zhAnswer": "额外审核通常来自产品文案、政策语言、客服消息和结账承诺之间的冲突信号。审核人员和客户会把这些层次互相对照，因此不一致往往比某一个词本身更危险。",
+        },
+        {
+            "question": "How should the article handle high-intent commercial keywords?",
+            "answer": "It should keep commercial relevance while tightening the implied promise. The article can discuss buyer search behavior, but it should reframe those phrases through operational wording, documented limits, and evidence-backed explanations.",
+            "zhQuestion": "文章应该如何处理高意图商业关键词？",
+            "zhAnswer": "文章应保留商业相关性，同时收紧关键词背后的隐含承诺。它可以讨论买家实际搜索的内容，但必须通过运营措辞、记录边界和证据说明重新框定这些词。",
+        },
+        {
+            "question": "What evidence should exist before traffic scales?",
+            "answer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
+            "zhQuestion": "放大流量前应该准备哪些证据？",
+            "zhAnswer": "最低证据包应覆盖政策截图、客服日志、履约记录，以及与该类目相关的订单追踪或产品表现证明。当争议、审核或审计到来时，这些文件能让文章保持可辩护。",
+        },
+        {
+            "question": "When should a human review the article before publication?",
+            "answer": "Human review is required whenever the draft references account-specific notices, customer communications, supplier records, or appeal wording that could be submitted to a platform, payment provider, or regulator.",
+            "zhQuestion": "什么时候必须在发布前人工复核？",
+            "zhAnswer": "只要草稿涉及具体账号通知、客户沟通、供应商记录，或可能提交给平台、支付机构、监管方的申诉措辞，就必须由人工复核。",
+        },
+    ]
+    for index, item in enumerate(cleaned_faq):
+        fallback = english_faq_fallbacks[min(index, len(english_faq_fallbacks) - 1)]
+        if cjk_count(item.get("question")) > 8 or cjk_count(item.get("answer")) > 40:
+            item["question"] = fallback["question"]
+            item["answer"] = fallback["answer"]
+        if looks_english_dominant(item.get("zhQuestion")):
+            item["zhQuestion"] = fallback["zhQuestion"]
+        if looks_english_dominant(item.get("zhAnswer")):
+            item["zhAnswer"] = fallback["zhAnswer"]
     normalized["faq"] = cleaned_faq
 
     normalized["bodyMarkdown"] = first_string(normalized.get("bodyMarkdown"))
@@ -861,6 +1013,8 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
         normalized["bodyMarkdown"] = (normalized["bodyMarkdown"].strip() + "\n\n---\n\n" + supplement).strip()
     if content_mode == "fact-source" and needs_fact_source_blocks(normalized["bodyMarkdown"]):
         normalized["bodyMarkdown"] = (fact_source_blocks(normalized, state, "en") + "\n\n---\n\n" + normalized["bodyMarkdown"].strip()).strip()
+    if cjk_count(normalized["bodyMarkdown"]) > 120:
+        normalized["bodyMarkdown"] = build_markdown_article(normalized, state, "en")
     normalized["zhBodyMarkdown"] = first_string(normalized.get("zhBodyMarkdown"))
     min_zh_markdown_length = 2600 if content_mode == "fact-source" else 2200
     if not normalized["zhBodyMarkdown"]:
@@ -870,6 +1024,8 @@ def normalize_article(article: Dict[str, Any], state: WorkflowState) -> Dict[str
         normalized["zhBodyMarkdown"] = (normalized["zhBodyMarkdown"].strip() + "\n\n---\n\n" + supplement).strip()
     if content_mode == "fact-source" and needs_fact_source_blocks(normalized["zhBodyMarkdown"]):
         normalized["zhBodyMarkdown"] = (fact_source_blocks(normalized, state, "zh") + "\n\n---\n\n" + normalized["zhBodyMarkdown"].strip()).strip()
+    if looks_english_dominant(normalized["zhBodyMarkdown"]) or cjk_count(normalized["zhBodyMarkdown"]) < 500:
+        normalized["zhBodyMarkdown"] = build_markdown_article(normalized, state, "zh")
 
     toc = normalized.get("toc", [])
     if not isinstance(toc, list):
@@ -1220,7 +1376,7 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
         "slug": slug,
         "contentMode": state.get("content_mode", "standard"),
         "title": "What cross-border sellers should fix before scaling %s%s" % (seed_title, rewrite_note),
-        "zhTitle": "%s compliance article" % safe_seed,
+        "zhTitle": "%s合规风险与证据准备指南" % safe_seed,
         "category": profile.get("category", "Payment Risk"),
         "market": market,
         "riskLevel": profile.get("risk_level", "High"),
@@ -1228,9 +1384,9 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
         "metaTitle": "What cross-border sellers should fix before scaling %s" % seed_title,
         "metaDescription": "A long-form compliance article on safer claims, policy wording, support boundaries, and evidence files for %s sellers in %s." % (seed_title, market),
         "dek": "A publishable intelligence article on the claims, policy wording, support boundaries, and evidence files that matter before this category attracts avoidable review.",
-        "zhDek": "An article introduction for %s covering product claims, policy wording, and evidence preparation." % safe_seed,
+        "zhDek": "围绕%s的公开主张、政策措辞、客服边界和证据资料，建立可发布的合规内容框架。" % safe_seed,
         "summary": "A publishable compliance article for teams selling %s into %s. It explains how to write readable public copy, align policy pages with real operations, and prepare the evidence package needed before disputes, payment review, or platform checks arrive." % (seed_title, market),
-        "zhSummary": "A publishable long-form article for %s that explains how page copy, policy pages, support language, and evidence files should stay aligned." % safe_seed,
+        "zhSummary": "一篇面向%s的可发布长文，说明页面文案、政策页面、客服语言和证据文件如何保持一致。" % safe_seed,
         "introduction": (
             "Many operators treat category compliance as a last-minute editing problem. In practice, review pressure builds much earlier: "
             "the article headline promises too much, the policy page suggests a cleaner process than the team can prove, and support "
@@ -1240,10 +1396,8 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
             "the first dispute lands."
         ),
         "zhIntroduction": (
-            "This article should open by explaining how scrutiny begins: not with one phrase alone, but when page claims, policy wording, "
-            "and support language describe different realities.\n\n"
-            "It should then explain which commercially useful expressions can stay public, which phrases must stay internal, and what "
-            "documents need to exist before the first dispute or review arrives."
+            "这篇文章应先说明审核压力如何出现：它通常不是由某一个词单独触发，而是页面主张、政策措辞和客服语言描述了不同的运营现实。\n\n"
+            "随后，文章需要解释哪些商业表达可以保留在公开页面，哪些高风险措辞必须留在内部红线清单，以及在第一次争议或审核到来之前，哪些文件必须已经准备好。"
         ),
         "keyTakeaways": [
             "Use the article to clarify operating boundaries, not just to replace a few risky adjectives.",
@@ -1252,52 +1406,52 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
             "Build the evidence package before scale so the article can support SEO, customer service, and review defense at the same time.",
         ],
         "zhKeyTakeaways": [
-            "Use the article to define operating boundaries instead of just swapping risky adjectives.",
-            "Product copy, FAQ answers, refund policy, and support responses should describe the same reality.",
-            "Keep redline phrases inside an internal warning list and keep public copy tied to verifiable operations.",
-            "Prepare evidence before scale so the article can support SEO, support handling, and review defense together.",
+            "用文章定义运营边界，而不是只替换几个高风险形容词。",
+            "产品文案、FAQ、退款政策和客服回复必须描述同一个运营现实。",
+            "把红线表达留在内部警戒清单中，让公开文案绑定可验证的运营事实。",
+            "在放大流量前准备证据资料，让文章同时支持 SEO、客服处理和审核应对。",
         ],
         "redlineTerms": state.get("redline_terms", [])[:8],
         "relatedKeywords": list(dict.fromkeys([safe_seed, seed_title, market] + safe_terms + evidence_items))[:8],
         "intelligenceCards": [
             {
                 "label": "Claim Boundary",
-                "zhLabel": "Claim Boundary",
+                "zhLabel": "主张边界",
                 "finding": "Public copy for %s should explain documented operating boundaries rather than compressing customer uncertainty into absolute outcomes." % seed_title,
-                "zhFinding": "Public copy for %s should explain documented operating boundaries rather than compressing customer uncertainty into absolute outcomes." % safe_seed,
+                "zhFinding": "%s的公开文案应解释有记录的运营边界，而不是把客户不确定性压缩成绝对结果承诺。" % safe_seed,
                 "evidence": "Compare product descriptions, checkout language, refund policy screenshots, and support replies for the same operating reality.",
-                "zhEvidence": "Compare product descriptions, checkout language, refund policy screenshots, and support replies for the same operating reality.",
+                "zhEvidence": "对照产品描述、结账语言、退款政策截图和客服回复，确认它们是否描述同一个运营现实。",
                 "action": "Rewrite high-intent page language around verifiable operations and keep sensitive phrases in the internal redline watchlist.",
-                "zhAction": "Rewrite high-intent page language around verifiable operations and keep sensitive phrases in the internal redline watchlist.",
+                "zhAction": "围绕可验证的运营事实重写高意图页面语言，并把敏感表达放入内部红线观察清单。",
                 "severity": profile.get("risk_level", "High"),
             },
             {
                 "label": "Evidence File",
-                "zhLabel": "Evidence File",
+                "zhLabel": "证据文件",
                 "finding": "The article becomes defensible only when the page claims can be traced to evidence files before a payment review, dispute, or platform check appears.",
-                "zhFinding": "The article becomes defensible only when the page claims can be traced to evidence files before a payment review, dispute, or platform check appears.",
+                "zhFinding": "只有当页面主张能在支付审核、争议或平台检查出现前追溯到证据文件时，文章才具备可辩护性。",
                 "evidence": "Minimum file set: %s." % evidence_text,
-                "zhEvidence": "Minimum file set: %s." % evidence_text,
+                "zhEvidence": "最低资料集包括：%s。" % evidence_text_zh(evidence_items),
                 "action": "Create a versioned evidence folder and reference that file set when updating SEO pages, policy pages, and support templates.",
-                "zhAction": "Create a versioned evidence folder and reference that file set when updating SEO pages, policy pages, and support templates.",
+                "zhAction": "建立带版本记录的证据文件夹，并在更新 SEO 页面、政策页面和客服模板时引用这套资料。",
                 "severity": "High",
             },
             {
                 "label": "Support Reality",
-                "zhLabel": "Support Reality",
+                "zhLabel": "客服现实",
                 "finding": "Support replies, refund handling, and delivery explanations can quietly contradict the public article even when the article itself sounds controlled.",
-                "zhFinding": "Support replies, refund handling, and delivery explanations can quietly contradict the public article even when the article itself sounds controlled.",
+                "zhFinding": "即使文章本身听起来克制，客服回复、退款处理和交付解释也可能悄悄与公开内容发生冲突。",
                 "evidence": "Use support logs, refund decisions, and delivery timelines to test whether the article describes the same reality customers experience.",
-                "zhEvidence": "Use support logs, refund decisions, and delivery timelines to test whether the article describes the same reality customers experience.",
+                "zhEvidence": "使用客服日志、退款决策和交付时间线，检查文章是否描述了客户实际经历的同一个现实。",
                 "action": "Align customer-service templates with the article before scaling traffic or launching paid acquisition into the page.",
-                "zhAction": "Align customer-service templates with the article before scaling traffic or launching paid acquisition into the page.",
+                "zhAction": "在放大流量或投放付费获客之前，让客服模板与文章内容保持一致。",
                 "severity": "Medium",
             },
         ],
         "sections": [
             {
                 "heading": "Why %s starts drawing review before the seller notices" % seed_title,
-                "zhHeading": "Why %s enters review before the seller notices" % safe_seed,
+                "zhHeading": "%s为什么会在卖家察觉前进入审核压力区" % safe_seed,
                 "body": (
                     "For %s, the real risk rarely starts with one forbidden word alone. Review pressure usually comes from the combination "
                     "of product claims, refund expectations, delivery promises, and how clearly the seller explains operational limits. "
@@ -1308,15 +1462,13 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
                     "a memo, it stays internal. If it reads like an article with a clear argument, it becomes useful on-site intelligence."
                 ) % seed_title,
                 "zhBody": (
-                    "This section should explain why review pressure starts early: product promises, refund expectations, delivery language, "
-                    "and operational boundaries begin to conflict.\n\n"
-                    "It should also explain why article structure matters. A real article frames the business problem, explains the review "
-                    "context, and then develops the argument through claims, policy language, and evidence."
-                ),
+                    "%s的真实风险很少只来自一个禁用词。审核压力通常来自产品承诺、退款预期、交付语言和运营边界之间的组合冲突。文章应说明这些层次何时开始互相矛盾，而不是只盯着某个激进短语。\n\n"
+                    "这也是文章结构重要的原因。标题要框定商业问题，导语要解释审核语境，正文要从主张风险推进到政策风险和证据风险。只有这样，文章才像站内情报，而不是内部备忘录。"
+                ) % safe_seed,
             },
             {
                 "heading": "Which claims should stay out of the article, not just out of the ad copy",
-                "zhHeading": "Which claims should stay out of the article, not just out of ads",
+                "zhHeading": "哪些主张不应出现在文章中，而不只是广告中",
                 "body": (
                     "High-intent keywords still matter, but they must not force the page into prohibited or unverifiable claims. Build article "
                     "sections around safer demand-capture phrases such as %s, then explain what each phrase can and cannot imply in public-facing "
@@ -1326,15 +1478,13 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
                     "it in titles, checkout copy, return policies, or ad language."
                 ) % safe_terms_text,
                 "zhBody": (
-                    "This section should show that commercial intent and compliant language can coexist when the article is built around safer "
-                    "phrases and clear boundaries.\n\n"
-                    "It should explain that the article may discuss redline problems, but it should not repeat those phrases as if they belong in "
-                    "titles, policy pages, or checkout copy."
+                    "高意图关键词仍然重要，但它不能把页面推向被禁止或无法验证的主张。文章可以围绕更安全的需求表达展开，并解释每一种表达在公开页面中能暗示什么、不能暗示什么。\n\n"
+                    "关键区别在于编辑边界。好文章可以点出红线问题，解释为什么危险，再转向更安全的措辞；真正敏感的表达应留在内部警戒清单，而不是出现在标题、政策页或结账文案中。"
                 ),
             },
             {
                 "heading": "What a readable article reveals about the real support stack",
-                "zhHeading": "What a readable article reveals about the real support stack",
+                "zhHeading": "一篇可读文章会暴露怎样的真实客服体系",
                 "body": (
                     "A stronger page does not just rewrite adjectives. It aligns product copy, FAQ answers, refund language, fulfillment notes, "
                     "and support replies so they all describe the same operating reality. The article becomes persuasive when readers leave with "
@@ -1345,14 +1495,13 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
                     "and where the support boundary sits when a claim is challenged."
                 ),
                 "zhBody": (
-                    "This section should translate polished wording into real support behavior: what the product does, what it does not do, how the "
-                    "team responds, and which promises the business is willing to stand behind.\n\n"
-                    "That is the difference between a decorative AI draft and an article that can actually support operations."
+                    "更强的页面不只是改写形容词。它会让产品文案、FAQ、退款语言、履约说明和客服回复描述同一个运营现实。读者离开页面时，应清楚知道产品能做什么、不能做什么、团队如何响应，以及哪些承诺可以被书面记录支撑。\n\n"
+                    "许多生成稿失败就在这里：文字看起来顺滑，却无法转化为客服行为。可发布文章必须说明运营者实际会记录什么、如何收集证据，以及当主张被挑战时支持边界在哪里。"
                 ),
             },
             {
                 "heading": "Which evidence files turn the article into an operating asset",
-                "zhHeading": "Which evidence files turn the article into an operating asset",
+                "zhHeading": "哪些证据文件能把文章变成运营资产",
                 "body": (
                     "The article only becomes operationally useful when it is backed by documents. For this category, the minimum evidence set should "
                     "include %s. Without that layer, even well-written copy remains a content exercise rather than a defensible commercial asset.\n\n"
@@ -1361,9 +1510,9 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
                     "or audit asks for proof."
                 ) % evidence_text,
                 "zhBody": (
-                    "This section should identify the evidence package that makes the article operationally useful instead of merely readable.\n\n"
-                    "Once those files exist, the same article can support SEO, support handling, payment review, and internal training without losing coherence."
-                ),
+                    "文章只有被文件支撑时，才会具备运营价值。对这个类目来说，最低证据集通常包括%s。没有这层资料，即使文字写得很好，也仍然只是内容练习，而不是可辩护的商业资产。\n\n"
+                    "一旦这些文件存在，同一篇文章就可以同时支持 SEO、支付审核、客服处理和内部培训。这才是值得追求的标准：不是装饰性文章，而是在争议、审核或审计要求举证时仍然讲得通。"
+                ) % evidence_text_zh(evidence_items),
             },
         ],
         "conclusion": (
@@ -1374,28 +1523,27 @@ def build_fallback_article(state: WorkflowState, safe_seed: str, revision_count:
             "buyers, support tickets, payment reviewers, and internal training without collapsing into contradiction."
         ),
         "zhConclusion": (
-            "The conclusion should leave the reader with one standard: every public claim maps to an operating fact, every policy promise maps to a "
-            "support process, and every sensitive category maps to an evidence file.\n\n"
-            "That is what turns an article from a thin briefing note into an asset that still holds up when buyers, payment teams, or internal reviewers ask for proof."
+            "这篇文章最后应留下一个清晰标准：每一个公开主张都要对应一个运营事实，每一个政策承诺都要对应一个客服流程，每一个敏感类目都要对应一份证据文件。\n\n"
+            "这才会让文章从单薄说明变成真正的资产：当买家、支付团队或内部复核人员要求证明时，它仍然能够成立。"
         ),
         "faq": [
             {
                 "question": "What usually triggers extra scrutiny in this category?",
                 "answer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
-                "zhQuestion": "What usually triggers extra scrutiny in this category?",
-                "zhAnswer": "Extra scrutiny usually comes from conflicting signals across product copy, policy language, support messages, and checkout promises. Reviewers and customers compare those layers against each other, so inconsistency is often a bigger risk than any one phrase alone.",
+                "zhQuestion": "这个类目通常为什么会触发额外审核？",
+                "zhAnswer": "额外审核通常来自产品文案、政策语言、客服消息和结账承诺之间的冲突信号。审核人员和客户会把这些层次互相对照，因此不一致往往比某一个词本身更危险。",
             },
             {
                 "question": "How should the article handle high-intent commercial keywords?",
                 "answer": "It should keep commercial relevance while tightening the implied promise. The article can discuss what buyers search for, but it should reframe those terms through operational wording, documented limits, and evidence-backed explanations.",
-                "zhQuestion": "How should the article handle high-intent commercial keywords?",
-                "zhAnswer": "It should keep commercial relevance while tightening the implied promise. The article can discuss what buyers search for, but it should reframe those terms through operational wording, documented limits, and evidence-backed explanations.",
+                "zhQuestion": "文章应该如何处理高意图商业关键词？",
+                "zhAnswer": "文章应保留商业相关性，同时收紧关键词背后的隐含承诺。它可以讨论买家实际搜索的内容，但必须通过运营措辞、记录边界和证据说明重新框定这些词。",
             },
             {
                 "question": "What evidence should exist before traffic scales?",
                 "answer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
-                "zhQuestion": "What evidence should exist before traffic scales?",
-                "zhAnswer": "The minimum evidence package should cover policy screenshots, support logs, fulfillment records, and order-tracking or product-performance proof relevant to the category. Those files let the article remain defensible when disputes, reviews, or audits arrive.",
+                "zhQuestion": "放大流量前应该准备哪些证据？",
+                "zhAnswer": "最低证据包应覆盖政策截图、客服日志、履约记录，以及与该类目相关的订单追踪或产品表现证明。当争议、审核或审计到来时，这些文件能让文章保持可辩护。",
             },
         ],
         "bodyMarkdown": "",
@@ -1486,11 +1634,14 @@ def writer_agent(state: WorkflowState) -> Dict[str, Any]:
             "It is acceptable, and preferred, to set bodyMarkdown and zhBodyMarkdown to empty strings. The local renderer will assemble the final markdown article from the developed sections, intelligenceCards, FAQ, keyTakeaways, introduction, and conclusion. "
             "Each section body must still contain two developed paragraphs."
         )
-        article = llm.chat_json(
-            writer_system_prompt,
-            json.dumps(payload, ensure_ascii=False),
-            temperature=0.35,
-        )
+        try:
+            article = llm.chat_json(
+                writer_system_prompt,
+                json.dumps(payload, ensure_ascii=False),
+                temperature=0.35,
+            )
+        except Exception as exc:
+            print("Writer LLM returned unusable JSON; using local structured fallback: %s" % exc)
     article = normalize_article(article, state)
 
     emit_progress(
@@ -1762,6 +1913,12 @@ def validate_article(article: Dict[str, Any], strict_terms: List[str]) -> Dict[s
         errors.append("bodyMarkdown is too short for a publishable article")
     if len(first_string(article.get("zhBodyMarkdown"))) < 2000:
         errors.append("zhBodyMarkdown is too short for a localized article")
+    if cjk_count(article.get("bodyMarkdown")) > 120:
+        errors.append("bodyMarkdown contains too much Chinese text; English and Chinese article bodies must stay separated")
+    if cjk_count(article.get("zhBodyMarkdown")) < 500:
+        errors.append("zhBodyMarkdown does not contain enough Chinese text")
+    if looks_english_dominant(article.get("zhBodyMarkdown")):
+        errors.append("zhBodyMarkdown is English-dominant; Chinese and English article bodies must stay separated")
     sections = article.get("sections", [])
     if not isinstance(sections, list) or len(sections) < 4:
         errors.append("sections must contain at least four sections")

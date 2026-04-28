@@ -130,7 +130,7 @@ function buildFactSourceSvg(article, asset) {
 }
 
 function factSourceAssets(article, slug) {
-  const baseRows = [
+  const assetDefinitions = [
     {
       type: "evidence-chain",
       title: "Evidence Chain",
@@ -160,7 +160,7 @@ function factSourceAssets(article, slug) {
     },
   ];
 
-  return baseRows.map((asset) => {
+  return assetDefinitions.map((asset) => {
     const fileName = `${slug}-${asset.type}.svg`;
     const src = `/insights/fact-source/${fileName}`;
     fs.writeFileSync(path.join(factSourceDir, fileName), buildFactSourceSvg(article, asset), "utf8");
@@ -173,13 +173,19 @@ function factSourceAssets(article, slug) {
   });
 }
 
-function appendVisualSection(markdown, assets, heading) {
+function appendVisualSection(markdown, assets, heading, locale = "en") {
   const text = String(markdown || "");
   if (!assets.length || text.includes(assets[0].src)) return text;
+  const isZh = locale === "zh";
   const block = [
     `## ${heading}`,
     "",
-    ...assets.map((asset) => `![${asset.alt}](${asset.src})\n\n**${asset.title}.** This diagram is generated from the article's fact-source workflow and should be reviewed against the underlying evidence package before publication.`),
+    ...assets.map((asset) => {
+      const caption = isZh
+        ? `**${asset.title}.** 这张图由文章的事实源流程生成，发布前仍应对照底层证据包进行人工核验。`
+        : `**${asset.title}.** This diagram is generated from the article's fact-source workflow and should be reviewed against the underlying evidence package before publication.`;
+      return `![${asset.alt}](${asset.src})\n\n${caption}`;
+    }),
   ].join("\n\n");
   return `${text.trim()}\n\n${block}\n`;
 }
@@ -228,9 +234,8 @@ function main() {
     if (!slug) throw new Error(`Invalid slug in ${draftPath}`);
 
     const coverFileName = `${slug}.svg`;
-    const coverPath = path.join(coversDir, coverFileName);
     const publicPath = `/insights/covers/${coverFileName}`;
-    fs.writeFileSync(coverPath, buildSvg({ ...article, slug }), "utf8");
+    fs.writeFileSync(path.join(coversDir, coverFileName), buildSvg({ ...article, slug }), "utf8");
 
     article.coverImage = publicPath;
     article.ogImage = publicPath;
@@ -242,8 +247,8 @@ function main() {
       const assets = factSourceAssets(article, slug);
       article.visualAssets = assets;
       article.visualUpdatedAt = new Date().toISOString();
-      article.bodyMarkdown = appendVisualSection(article.bodyMarkdown, assets, "Fact-Source Visuals");
-      article.zhBodyMarkdown = appendVisualSection(article.zhBodyMarkdown, assets, "事实源图表");
+      article.bodyMarkdown = appendVisualSection(article.bodyMarkdown, assets, "Fact-Source Visuals", "en");
+      article.zhBodyMarkdown = appendVisualSection(article.zhBodyMarkdown, assets, "事实源图表", "zh");
     } else {
       article.visualAssets = [];
     }

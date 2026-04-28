@@ -29,6 +29,20 @@ function countWords(value) {
     .filter(Boolean).length;
 }
 
+function countCjk(value) {
+  return (String(value || "").match(/[\u4e00-\u9fff]/g) || []).length;
+}
+
+function countLatinWords(value) {
+  return (String(value || "").match(/\b[A-Za-z][A-Za-z'-]{2,}\b/g) || []).length;
+}
+
+function isEnglishDominant(value) {
+  const cjk = countCjk(value);
+  const latin = countLatinWords(value);
+  return latin >= 80 && latin > Math.max(40, cjk / 5);
+}
+
 function collectHeadings(markdown) {
   return String(markdown || "")
     .split("\n")
@@ -174,6 +188,18 @@ export function validateInsight(article) {
 
   if (typeof article.zhBodyMarkdown !== "string" || article.zhBodyMarkdown.length < 2000) {
     errors.push("zhBodyMarkdown is too short for a publishable localized article");
+  }
+
+  if (countCjk(article.bodyMarkdown) > 120) {
+    errors.push("bodyMarkdown contains too much Chinese text; keep English and Chinese article bodies separated");
+  }
+
+  if (countCjk(article.zhBodyMarkdown) < 500) {
+    errors.push("zhBodyMarkdown does not contain enough Chinese text");
+  }
+
+  if (isEnglishDominant(article.zhBodyMarkdown)) {
+    errors.push("zhBodyMarkdown is English-dominant; keep Chinese and English article bodies separated");
   }
 
   const englishWordCount = countWords(article.bodyMarkdown);

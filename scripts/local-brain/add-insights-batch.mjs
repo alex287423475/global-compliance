@@ -44,11 +44,104 @@ function getExistingSlugs(source) {
   return Array.from(source.matchAll(/slug:\s*"([^"]+)"/g)).map((match) => match[1]);
 }
 
+function splitArticleArray(source) {
+  const markerIndex = source.indexOf("export const insightArticles");
+  const assignmentIndex = source.indexOf("=", markerIndex);
+  const arrayStart = source.indexOf("[", assignmentIndex);
+  const arrayEnd = source.lastIndexOf("];");
+
+  if (
+    markerIndex === -1 ||
+    assignmentIndex === -1 ||
+    arrayStart === -1 ||
+    arrayEnd === -1 ||
+    arrayEnd <= arrayStart
+  ) {
+    throw new Error("Could not find article array boundaries in content/insights.ts");
+  }
+
+  return {
+    prefix: source.slice(0, arrayStart + 1),
+    body: source.slice(arrayStart + 1, arrayEnd),
+    suffix: source.slice(arrayEnd),
+  };
+}
+
+function parseArticleBlocks(body) {
+  const blocks = [];
+  let index = 0;
+
+  while (index < body.length) {
+    const start = body.indexOf("{", index);
+    if (start === -1) break;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let end = -1;
+
+    for (let cursor = start; cursor < body.length; cursor += 1) {
+      const char = body[cursor];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === "\"") {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = true;
+      } else if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = cursor + 1;
+          break;
+        }
+      }
+    }
+
+    if (end === -1) {
+      throw new Error("Could not parse article object boundaries in content/insights.ts");
+    }
+
+    let blockEnd = end;
+    while (blockEnd < body.length && /[\s,]/.test(body[blockEnd])) {
+      blockEnd += 1;
+    }
+
+    const text = body.slice(start, blockEnd).trim().replace(/,\s*$/, "");
+    const slugMatch = text.match(/slug:\s*"([^"]+)"/);
+    blocks.push({ slug: slugMatch?.[1] || "", text });
+    index = blockEnd;
+  }
+
+  return blocks;
+}
+
+function replaceArticles(source, replacementArticles) {
+  const replacementSlugs = new Set(replacementArticles.map((article) => article.slug));
+  const { prefix, body, suffix } = splitArticleArray(source);
+  const keptBlocks = parseArticleBlocks(body).filter((block) => !replacementSlugs.has(block.slug));
+  const blocks = [
+    ...keptBlocks.map((block) => `  ${block.text},`),
+    ...replacementArticles.map((article) => `  ${toTypeScriptObject(article)},`),
+  ];
+  return `${prefix}\n${blocks.join("\n")}\n${suffix}`;
+}
+
 const dryRun = process.argv.includes("--dry-run");
-const inputPaths = process.argv.slice(2).filter((arg) => arg !== "--dry-run");
+const replaceExisting = process.argv.includes("--replace");
+const inputPaths = process.argv.slice(2).filter((arg) => arg !== "--dry-run" && arg !== "--replace");
 
 if (inputPaths.length === 0) {
-  console.error("Usage: npm run brain:add-batch -- [--dry-run] local-brain/drafts");
+  console.error("Usage: npm run brain:add-batch -- [--dry-run] [--replace] local-brain/drafts");
   process.exit(1);
 }
 
@@ -108,7 +201,7 @@ if (errors.length > 0) {
 
 const source = fs.readFileSync(contentPath, "utf8");
 const existingSlugs = new Set(getExistingSlugs(source));
-const newArticles = articles.filter((article) => !existingSlugs.has(article.slug));
+const newArticles = replaceExisting ? articles : articles.filter((article) => !existingSlugs.has(article.slug));
 const skippedArticles = articles.filter((article) => existingSlugs.has(article.slug));
 
 if (newArticles.length === 0) {
@@ -117,13 +210,25 @@ if (newArticles.length === 0) {
 }
 
 if (dryRun) {
-  console.log(`Dry run passed. ${newArticles.length} new article(s) ready to add.`);
+  console.log(`Dry run passed. ${newArticles.length} article(s) ready to ${replaceExisting ? "replace/add" : "add"}.`);
 
   if (skippedArticles.length > 0) {
     console.log(`Would skip ${skippedArticles.length} existing article(s): ${skippedArticles.map((article) => article.slug).join(", ")}`);
   }
 
   process.exit(0);
+}
+
+if (replaceExisting) {
+  try {
+    const updatedSource = replaceArticles(source, newArticles);
+    fs.writeFileSync(contentPath, updatedSource, "utf8");
+    console.log(`Replaced or added ${newArticles.length} insight article(s).`);
+    process.exit(0);
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }
 
 const marker = "];";
