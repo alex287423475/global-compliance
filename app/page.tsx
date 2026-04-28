@@ -78,6 +78,36 @@ const content = {
       "“Guaranteed approval within 24 hours, with anonymous settlement and risk-free returns.”",
     warningCopy:
       "This language can trigger concurrent scrutiny across payment gateways, advertising review, AML posture, and consumer-protection analysis. The remedy is not synonym replacement; it is a controlled rewrite of the commercial promise, evidentiary basis, and disclaimer architecture.",
+    casesEyebrow: "Case Types",
+    casesTitle: "Concrete files we can turn into controlled response packages",
+    caseColumns: ["Case", "Materials required", "Typical output"],
+    caseRows: [
+      [
+        "PayPal / Stripe account review",
+        "Gateway notice, store policies, order history, fulfillment proof, refund rules",
+        "Policy redline, risk-language rewrite, account-review response file",
+      ],
+      [
+        "Chargeback and dispute rebuttal",
+        "Order timeline, delivery proof, customer messages, refund record, product evidence",
+        "Evidence index, rebuttal letter, liability-position summary",
+      ],
+      [
+        "Amazon POA or listing appeal",
+        "Suspension notice, root-cause data, corrective actions, prevention records",
+        "POA structure, root-cause statement, corrective-action file",
+      ],
+      [
+        "FDA / CE / market-entry review",
+        "Labels, claims, manuals, product pages, technical files, supplier certificates",
+        "Redline list, safer claims, market-entry document checklist",
+      ],
+      [
+        "IP complaint or takedown defense",
+        "Platform notice, rights documents, product comparison, timeline, correspondence",
+        "Counter-notice, non-infringement narrative, recovery evidence pack",
+      ],
+    ],
     audienceEyebrow: "Who We Serve",
     audienceTitle: "Built for teams operating under cross-border exposure",
     audiences: [
@@ -183,6 +213,26 @@ const content = {
         "04",
         "Archive the project knowledge file",
         "Preserve redline terms, safer alternatives, evidence checklists, and version notes for internal reuse.",
+      ],
+    ],
+    faqEyebrow: "Decision Notes",
+    faqTitle: "Before you submit a file",
+    faqs: [
+      [
+        "Is this a translation service?",
+        "No. Language work is only one layer. The work focuses on risk framing, evidence sequencing, platform-specific terminology, and submission-ready response architecture.",
+      ],
+      [
+        "When should I use a toolkit instead of a private review?",
+        "Use a toolkit for repeatable internal execution. Use a private review when funds, listings, regulators, high-value buyers, or formal disputes are already involved.",
+      ],
+      [
+        "Where should sensitive materials be submitted?",
+        "Start with the diagnostic form. If the case fits, we route you to a dedicated intake form or secure submission path for the exact evidence category.",
+      ],
+      [
+        "Can the same case produce reusable internal assets?",
+        "Yes. A case can leave behind redline terms, safer language alternatives, evidence checklists, version notes, and platform-specific SOP files.",
       ],
     ],
     reviewEyebrow: "Private Compliance Review",
@@ -295,6 +345,36 @@ const content = {
       "“Guaranteed approval within 24 hours, with anonymous settlement and risk-free returns.”",
     warningCopy:
       "上述表达可能同时触发支付网关、广告合规、反洗钱和消费者保护语境中的多重审查。处理方式不是替换几个单词，而是重写商业承诺、证据依据和免责声明结构。",
+    casesEyebrow: "Case Types",
+    casesTitle: "把具体案件材料重组为可提交的回应文件包",
+    caseColumns: ["案件类型", "需要材料", "典型交付"],
+    caseRows: [
+      [
+        "PayPal / Stripe 账户审核",
+        "支付网关通知、店铺政策、订单记录、履约证明、退款规则",
+        "政策红线、风险语言重写、账户审核回应文件",
+      ],
+      [
+        "拒付与争议抗辩",
+        "订单时间线、签收证明、客户沟通、退款记录、商品证据",
+        "证据索引、抗辩信、责任立场摘要",
+      ],
+      [
+        "Amazon POA 或 Listing 申诉",
+        "封号通知、根因材料、整改措施、预防机制记录",
+        "POA 结构、根因陈述、整改行动文件",
+      ],
+      [
+        "FDA / CE / 市场准入预审",
+        "标签、功效声明、说明书、产品页、技术文件、供应商证书",
+        "红线清单、安全表达、市场准入文件清单",
+      ],
+      [
+        "IP 投诉或下架防御",
+        "平台通知、权利文件、产品对比、事件时间线、沟通记录",
+        "反诉通知、不侵权叙事、恢复链接证据包",
+      ],
+    ],
     audienceEyebrow: "Who We Serve",
     audienceTitle: "为处在跨境暴露风险中的团队而建",
     audiences: [
@@ -401,6 +481,26 @@ const content = {
         "归档本项目中的红线词、安全表达、证据清单和版本记录，供客户内部复用。",
       ],
     ],
+    faqEyebrow: "Decision Notes",
+    faqTitle: "提交材料前，先看清服务边界",
+    faqs: [
+      [
+        "这是普通翻译服务吗？",
+        "不是。语言只是其中一层，核心工作是风险叙事、证据排序、平台术语适配和可提交回应文件结构。",
+      ],
+      [
+        "什么时候买工具包，什么时候做私密评估？",
+        "工具包适合团队反复执行；私密评估适合资金、链接、监管、高价值客户或正式争议已经介入的场景。",
+      ],
+      [
+        "敏感材料应该在哪里提交？",
+        "先提交诊断表。案件适合受理后，会按证据类型进入专项资料收集表或更安全的提交路径。",
+      ],
+      [
+        "一次案件能沉淀为内部资料吗？",
+        "可以。项目可以沉淀红线词、安全表达、证据清单、版本记录和平台适配 SOP，供后续复用。",
+      ],
+    ],
     reviewEyebrow: "Private Compliance Review",
     reviewTitle: "先提交一份风险样张，再决定是否进入深度排雷",
     reviewCopy:
@@ -478,11 +578,13 @@ export default function Home() {
       <Hero t={t} />
       <EntryRoutes t={t} />
       <RiskPanel t={t} />
+      <CaseMatrix t={t} />
       <AudienceBand t={t} />
       <AuthorityGrid t={t} />
       <ProductStore t={t} />
       <AssetPreview t={t} />
       <Workflow t={t} />
+      <FaqBlock t={t} />
       <CheckoutBlock t={t} />
       <Footer t={t} />
     </main>
@@ -662,6 +764,48 @@ function RiskPanel({ t }: { t: typeof content.en }) {
             {String(t.warningCopy)}
           </p>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function CaseMatrix({ t }: { t: typeof content.en }) {
+  const columns = t.caseColumns as string[];
+  const rows = t.caseRows as string[][];
+
+  return (
+    <section className="mx-auto mb-24 max-w-7xl px-6 lg:px-10">
+      <div className="mb-10 max-w-3xl">
+        <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
+          {String(t.casesEyebrow)}
+        </p>
+        <h2 className="font-[family-name:var(--font-serif)] text-4xl font-medium leading-tight text-blue-950 md:text-5xl">
+          {String(t.casesTitle)}
+        </h2>
+      </div>
+
+      <div className="border-y border-blue-900/10">
+        <div className="hidden grid-cols-[0.7fr_1.1fr_1fr] border-b border-blue-900/10 py-4 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 md:grid">
+          {columns.map((column) => (
+            <p className="px-4" key={column}>{column}</p>
+          ))}
+        </div>
+        {rows.map(([caseType, materials, output]) => (
+          <div className="grid gap-5 border-b border-blue-900/10 py-6 last:border-b-0 md:grid-cols-[0.7fr_1.1fr_1fr]" key={caseType}>
+            <div className="px-0 md:px-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 md:hidden">{columns[0]}</p>
+              <h3 className="text-lg font-bold leading-7 text-blue-950">{caseType}</h3>
+            </div>
+            <div className="px-0 md:px-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 md:hidden">{columns[1]}</p>
+              <p className="text-sm leading-7 text-slate-600">{materials}</p>
+            </div>
+            <div className="border-l-2 border-red-800 bg-red-50/40 px-4 py-3">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800 md:hidden">{columns[2]}</p>
+              <p className="text-sm font-semibold leading-7 text-blue-950">{output}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -850,6 +994,33 @@ function Workflow({ t }: { t: typeof content.en }) {
             <p className="max-w-3xl text-sm leading-7 text-slate-600">{copy}</p>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function FaqBlock({ t }: { t: typeof content.en }) {
+  const faqs = t.faqs as string[][];
+
+  return (
+    <section className="mx-auto mb-24 max-w-7xl px-6 lg:px-10">
+      <div className="grid gap-10 border-t border-blue-900/10 pt-16 lg:grid-cols-[0.55fr_1fr]">
+        <div className="max-w-xl">
+          <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
+            {String(t.faqEyebrow)}
+          </p>
+          <h2 className="font-[family-name:var(--font-serif)] text-4xl font-medium leading-tight text-blue-950 md:text-5xl">
+            {String(t.faqTitle)}
+          </h2>
+        </div>
+        <div className="border-y border-blue-900/10">
+          {faqs.map(([question, answer]) => (
+            <div className="grid gap-4 border-b border-blue-900/10 py-7 last:border-b-0 md:grid-cols-[0.48fr_1fr]" key={question}>
+              <h3 className="text-base font-bold leading-7 text-blue-950">{question}</h3>
+              <p className="text-sm leading-7 text-slate-600">{answer}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
