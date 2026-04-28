@@ -328,6 +328,7 @@ export function LocalBrainDashboard() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
+  const [logQuery, setLogQuery] = useState("");
 
   async function refresh() {
     const [statusRes, draftsRes, configRes, promptRes, miningRes, keywordRes, keywordOptionsRes] = await Promise.all([
@@ -461,6 +462,13 @@ export function LocalBrainDashboard() {
     if (publishScope.length === 0) warnings.push("当前没有已审核草稿可发布。");
     return warnings;
   }, [config.modelA.api_key_set, config.modelB.api_key_set, drafts.length, publishScope.length, selectedDraftRows.length]);
+  const filteredLogs = useMemo(() => {
+    const logs = status?.log || [];
+    const query = logQuery.trim().toLowerCase();
+    if (!query) return logs;
+    return logs.filter((item) => `${item.step} ${item.message} ${item.time}`.toLowerCase().includes(query));
+  }, [logQuery, status?.log]);
+  const failedAuditCount = audits.filter((item) => !item.reviewPassed).length;
 
   const navBadges: Record<NavId, number> = {
     overview: metrics?.articleCount || drafts.length,
@@ -1505,11 +1513,25 @@ export function LocalBrainDashboard() {
     ),
     logs: (
       <Panel title="最近日志" description="脚本运行事件与审计元数据。">
+        <div className="mb-5 grid gap-4 md:grid-cols-4">
+          <InfoTile label="日志事件" value={String(status?.log?.length || 0)} />
+          <InfoTile label="筛选结果" value={String(filteredLogs.length)} />
+          <InfoTile label="审计记录" value={String(audits.length)} />
+          <InfoTile label="阻断记录" value={String(failedAuditCount)} />
+        </div>
         <div className="grid gap-5 xl:grid-cols-2">
           <div className="rounded-[8px] bg-slate-900/60 p-5">
-            <h3 className="text-lg font-semibold text-white">运行日志</h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold text-white">运行日志</h3>
+              <input
+                className="w-full rounded-[8px] border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 md:w-72"
+                value={logQuery}
+                onChange={(event) => setLogQuery(event.target.value)}
+                placeholder="搜索步骤、报错、slug"
+              />
+            </div>
             <div className="mt-4 max-h-[560px] space-y-3 overflow-auto">
-              {(status?.log || []).slice(-36).reverse().map((item, index) => <LogItem key={`${item.time}-${index}`} item={item} />)}
+              {filteredLogs.length === 0 ? <Empty text="没有匹配的日志。" /> : filteredLogs.slice(-60).reverse().map((item, index) => <LogItem key={`${item.time}-${index}`} item={item} />)}
             </div>
           </div>
           <div className="rounded-[8px] bg-slate-900/60 p-5">
@@ -1742,7 +1764,7 @@ function ModeButton({ active, children, onClick }: { active: boolean; children: 
 
 function FlowButton({ busy, disabled, hint, onClick, title }: { busy?: boolean; disabled?: boolean; hint?: string; onClick: () => void; title: string }) {
   return (
-    <button type="button" onClick={onClick} disabled={busy || disabled} className="min-h-[86px] rounded-[8px] bg-blue-600 px-5 py-4 text-center text-lg font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700">
+    <button type="button" title={hint || title} onClick={onClick} disabled={busy || disabled} className="min-h-[86px] rounded-[8px] bg-blue-600 px-5 py-4 text-center text-lg font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700">
       <span className="block">{busy ? "执行中..." : title}</span>
       {hint ? <span className="mt-2 block text-xs font-normal text-blue-100/80">{hint}</span> : null}
     </button>
@@ -2024,6 +2046,7 @@ function ArticleActionButton({ busy, disabled, label, onClick }: { busy?: boolea
   return (
     <button
       type="button"
+      title={label}
       className="rounded-[6px] border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-blue-400 hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-40"
       disabled={disabled || busy}
       onClick={onClick}
@@ -2057,19 +2080,33 @@ function AuditCard({ audit }: { audit: AuditMeta }) {
         <p>重写次数：{audit.revisionCount}</p>
         <p>问题数：{audit.findingsCount}</p>
         <p>审核：{audit.approved ? formatDate(audit.approvedAt) : "待审核"}</p>
+        <p>模型：{audit.provider || "-"} / {audit.model || "-"}</p>
+        <p>更新时间：{formatDate(audit.updatedAt)}</p>
       </div>
+      <p className="mt-3 break-all rounded-[6px] bg-slate-900 px-3 py-2 text-xs text-slate-500">{audit.filePath}</p>
     </div>
   );
 }
 
 function LogItem({ item }: { item: { time: string; step: string; message: string } }) {
+  const tone = logTone(item);
   return (
-    <div className="rounded-[8px] border border-slate-800 bg-slate-950 p-4">
-      <p className="text-xs text-slate-500">{formatDate(item.time)}</p>
-      <p className="mt-1 font-medium text-white">{item.step}</p>
+    <div className={`rounded-[8px] border p-4 ${tone === "error" ? "border-rose-500/30 bg-rose-950/20" : tone === "success" ? "border-emerald-500/25 bg-emerald-950/15" : "border-slate-800 bg-slate-950"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">{formatDate(item.time)}</p>
+        <StatusPill tone={tone === "error" ? "rose" : tone === "success" ? "green" : "slate"}>{tone === "error" ? "异常" : tone === "success" ? "完成" : "事件"}</StatusPill>
+      </div>
+      <p className="mt-2 font-medium text-white">{item.step}</p>
       <p className="mt-2 text-sm text-slate-300">{item.message}</p>
     </div>
   );
+}
+
+function logTone(item: { step: string; message: string }) {
+  const text = `${item.step} ${item.message}`.toLowerCase();
+  if (/fail|failed|error|blocked|阻断|失败|异常|forbidden/u.test(text)) return "error";
+  if (/completed|success|passed|saved|generated|发布|完成|通过|成功/u.test(text)) return "success";
+  return "neutral";
 }
 
 function Empty({ text }: { text: string }) {
