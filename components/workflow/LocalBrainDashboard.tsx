@@ -449,6 +449,18 @@ export function LocalBrainDashboard() {
     ],
     [audits, config, drafts.length, keywordRows.length, pendingDrafts.length, seedRows.length],
   );
+  const approvedDraftCount = audits.filter((item) => item.approved).length;
+  const reviewPassedCount = audits.filter((item) => item.reviewPassed).length;
+  const operationScope = selectedDraftRows.length > 0 ? selectedDraftRows : drafts;
+  const publishScope = selectedDraftRows.length > 0 ? selectedDraftRows : drafts.filter((draft) => auditsBySlug.get(draft.slug)?.approved);
+  const operationWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    if (!config.modelA.api_key_set) warnings.push("模型 A 未配置，不能生成文章。");
+    if (!config.modelB.api_key_set) warnings.push("模型 B 未配置，不能执行 AI 质检。");
+    if (drafts.length > 0 && selectedDraftRows.length === 0) warnings.push("未勾选草稿时，配图、质检、校验、审核会默认处理全部草稿。");
+    if (publishScope.length === 0) warnings.push("当前没有已审核草稿可发布。");
+    return warnings;
+  }, [config.modelA.api_key_set, config.modelB.api_key_set, drafts.length, publishScope.length, selectedDraftRows.length]);
 
   const navBadges: Record<NavId, number> = {
     overview: metrics?.articleCount || drafts.length,
@@ -1374,14 +1386,42 @@ export function LocalBrainDashboard() {
     ),
     operations: (
       <Panel title="流程操作" description="按照 SEO 文章生产线的显性流程执行：生成文章、刷新配图、AI 质检、AI 重写、校验草稿、人工审核、发布网站。">
+        <div className="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="rounded-[8px] border border-slate-700 bg-slate-950/45 p-4">
+            <h3 className="text-base font-semibold text-white">当前操作范围</h3>
+            <div className="mt-3 grid gap-3 text-sm text-slate-300 md:grid-cols-4">
+              <p>草稿池：{drafts.length} 篇</p>
+              <p>已选择：{selectedDraftRows.length} 篇</p>
+              <p>质检通过：{reviewPassedCount} 篇</p>
+              <p>可发布：{publishScope.length} 篇</p>
+            </div>
+            <p className="mt-3 break-all text-sm leading-6 text-slate-400">
+              {selectedDraftRows.length > 0 ? `将优先处理已选择草稿：${selectedDraftRows.map((item) => item.slug).slice(0, 5).join("、")}${selectedDraftRows.length > 5 ? " 等" : ""}` : "未选择草稿。除“发布网站”外，多数批量操作会默认处理草稿池中的全部草稿。"}
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-slate-700 bg-slate-950/45 p-4">
+            <h3 className="text-base font-semibold text-white">操作提示</h3>
+            <div className="mt-3 space-y-2">
+              {operationWarnings.length === 0 ? (
+                <p className="text-sm text-emerald-200">当前配置满足基本运行条件。</p>
+              ) : (
+                operationWarnings.map((item) => (
+                  <p key={item} className="text-sm leading-6 text-amber-100">
+                    {item}
+                  </p>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <FlowButton title="生成文章" busy={busy === "generate"} disabled={status?.isRunning || !config.modelA.api_key_set} onClick={() => void handleGenerate()} />
-          <FlowButton title="刷新配图" busy={busy === "images"} disabled={status?.isRunning || drafts.length === 0} onClick={() => void handleRefreshImages()} />
-          <FlowButton title="AI 质检" busy={busy === "review"} disabled={status?.isRunning || drafts.length === 0 || !config.modelB.api_key_set} onClick={() => void handleReview()} />
-          <FlowButton title="AI 重写" busy={busy === "rewrite"} disabled={status?.isRunning || selectedDraftSlugs.length === 0} onClick={() => void handleRewrite()} />
-          <FlowButton title="校验草稿" busy={busy === "validate"} disabled={status?.isRunning || drafts.length === 0} onClick={() => void handleValidate()} />
-          <FlowButton title="审核通过" busy={busy === "approve"} disabled={status?.isRunning || drafts.length === 0} onClick={() => void handleApprove()} />
-          <FlowButton title="发布网站" busy={busy === "publish"} disabled={status?.isRunning || drafts.length === 0 || confirmPublish.trim() !== "PUBLISH"} onClick={() => void handlePublish()} />
+          <FlowButton title="生成文章" hint="从已选关键词或种子词生成新草稿" busy={busy === "generate"} disabled={status?.isRunning || !config.modelA.api_key_set} onClick={() => void handleGenerate()} />
+          <FlowButton title="刷新配图" hint={`${operationScope.length} 篇草稿`} busy={busy === "images"} disabled={status?.isRunning || drafts.length === 0} onClick={() => void handleRefreshImages()} />
+          <FlowButton title="AI 质检" hint={`${operationScope.length} 篇草稿`} busy={busy === "review"} disabled={status?.isRunning || drafts.length === 0 || !config.modelB.api_key_set} onClick={() => void handleReview()} />
+          <FlowButton title="AI 重写" hint="仅处理已勾选草稿" busy={busy === "rewrite"} disabled={status?.isRunning || selectedDraftSlugs.length === 0} onClick={() => void handleRewrite()} />
+          <FlowButton title="校验草稿" hint={`${operationScope.length} 篇草稿`} busy={busy === "validate"} disabled={status?.isRunning || drafts.length === 0} onClick={() => void handleValidate()} />
+          <FlowButton title="审核通过" hint="要求 AI 质检通过" busy={busy === "approve"} disabled={status?.isRunning || drafts.length === 0} onClick={() => void handleApprove()} />
+          <FlowButton title="发布网站" hint={`${publishScope.length} 篇可发布`} busy={busy === "publish"} disabled={status?.isRunning || publishScope.length === 0 || confirmPublish.trim() !== "PUBLISH"} onClick={() => void handlePublish()} />
         </div>
         <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_420px]">
           <div>
@@ -1446,7 +1486,8 @@ export function LocalBrainDashboard() {
                 <p className="mt-2">已选草稿：{selectedDraftRows.length}</p>
                 <p className="mt-2">全部草稿：{drafts.length}</p>
                 <p className="mt-2">未发布草稿：{pendingDrafts.length}</p>
-                <p className="mt-2">已审核草稿：{audits.filter((item) => item.approved).length}</p>
+                <p className="mt-2">已审核草稿：{approvedDraftCount}</p>
+                <p className="mt-2">本次可发布：{publishScope.length}</p>
               </div>
               <div className="mt-4 rounded-[8px] border border-amber-500/25 bg-amber-950/20 p-4 text-sm leading-6 text-amber-100">
                 发布只处理“已审核通过”的草稿。若文章已发布，仍可查看编辑、重新生成修订稿、刷新配图、再次校验并重新发布。
@@ -1699,10 +1740,11 @@ function ModeButton({ active, children, onClick }: { active: boolean; children: 
   );
 }
 
-function FlowButton({ busy, disabled, onClick, title }: { busy?: boolean; disabled?: boolean; onClick: () => void; title: string }) {
+function FlowButton({ busy, disabled, hint, onClick, title }: { busy?: boolean; disabled?: boolean; hint?: string; onClick: () => void; title: string }) {
   return (
-    <button type="button" onClick={onClick} disabled={busy || disabled} className="min-h-[70px] rounded-[8px] bg-blue-600 px-5 py-4 text-center text-lg font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700">
-      {busy ? "执行中..." : title}
+    <button type="button" onClick={onClick} disabled={busy || disabled} className="min-h-[86px] rounded-[8px] bg-blue-600 px-5 py-4 text-center text-lg font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700">
+      <span className="block">{busy ? "执行中..." : title}</span>
+      {hint ? <span className="mt-2 block text-xs font-normal text-blue-100/80">{hint}</span> : null}
     </button>
   );
 }
@@ -1935,6 +1977,13 @@ function DraftCard({
         <p>配图：{draft.imageUpdatedAt ? formatDate(draft.imageUpdatedAt) : draft.coverImage ? "已生成" : "未生成"}{draft.contentMode === "fact-source" ? ` / 图表 ${draft.visualCount || 0}` : ""}</p>
       </div>
 
+      <div className="mt-5 grid gap-2 md:grid-cols-4">
+        <GateChip label="配图" ok={Boolean(draft.coverImage || draft.imageUpdatedAt)} detail={draft.coverImage || draft.imageUpdatedAt ? "已准备" : "待刷新"} />
+        <GateChip label="AI 质检" ok={Boolean(audit?.reviewPassed)} detail={audit ? (audit.reviewPassed ? "通过" : "需修订") : "未执行"} />
+        <GateChip label="人工审核" ok={Boolean(audit?.approved)} detail={audit?.approved ? "通过" : "待确认"} />
+        <GateChip label="线上发布" ok={draft.published} detail={draft.published ? "已发布" : "未发布"} />
+      </div>
+
       <div className="mt-6 rounded-[8px] border border-cyan-700/60 bg-cyan-950/20 p-4 text-base leading-8 text-cyan-100">
         {reviewSummary}
       </div>
@@ -1981,6 +2030,15 @@ function ArticleActionButton({ busy, disabled, label, onClick }: { busy?: boolea
     >
       {busy ? "执行中..." : label}
     </button>
+  );
+}
+
+function GateChip({ detail, label, ok }: { detail: string; label: string; ok: boolean }) {
+  return (
+    <div className={`rounded-[8px] border px-3 py-2 ${ok ? "border-emerald-500/25 bg-emerald-950/15" : "border-slate-700 bg-slate-900/70"}`}>
+      <p className="text-xs font-semibold text-slate-400">{label}</p>
+      <p className={`mt-1 text-sm font-semibold ${ok ? "text-emerald-200" : "text-slate-300"}`}>{detail}</p>
+    </div>
   );
 }
 
