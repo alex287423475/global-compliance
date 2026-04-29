@@ -200,6 +200,7 @@ export default function InsightArticleClient({
   const faq = localizedFaq(locale, article.faq);
   const readMinutes = useMemo(() => estimateReadMinutes(markdownBody), [markdownBody]);
   const topicHref = getTopicHref(article.category);
+  const intakeHref = getIntakeHref(article);
 
   return (
     <main className="min-h-screen bg-slate-50 text-blue-950">
@@ -273,7 +274,7 @@ export default function InsightArticleClient({
                   </a>
                   <a
                     className="inline-flex items-center justify-center border border-slate-300 bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
-                    href="/intake"
+                    href={intakeHref}
                   >
                     {t.openIntake}
                   </a>
@@ -374,7 +375,7 @@ export default function InsightArticleClient({
                 </a>
                 <a
                   className="inline-flex items-center justify-center border border-slate-300 bg-white px-8 py-3 text-sm font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
-                  href="/intake"
+                  href={intakeHref}
                 >
                   {t.openIntake}
                 </a>
@@ -414,7 +415,7 @@ export default function InsightArticleClient({
                 </a>
                 <a
                   className="inline-flex items-center justify-center border border-slate-300 bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
-                  href="/intake"
+                  href={intakeHref}
                 >
                   {t.openIntake}
                 </a>
@@ -574,6 +575,27 @@ function categoryLabel(category: string, locale: Locale) {
 function getTopicHref(category: string) {
   const topic = getInsightTopicByCategory(category);
   return topic ? `/insights/topics/${topic.slug}` : "/insights/topics";
+}
+
+function getIntakeHref(article: InsightArticle) {
+  const riskText = [
+    article.category,
+    article.title,
+    article.summary,
+    ...article.relatedKeywords,
+    ...article.redlineTerms,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    article.category === "Payment Risk" &&
+    /(chargeback|paypal|stripe|payment|gateway|refund|dispute)/.test(riskText)
+  ) {
+    return `/intake/chargeback?source=${encodeURIComponent(article.slug)}`;
+  }
+
+  return `/intake?source=${encodeURIComponent(article.slug)}&topic=${encodeURIComponent(article.category)}`;
 }
 
 function ArticlePager({

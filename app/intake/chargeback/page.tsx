@@ -38,6 +38,8 @@ const content = {
     submitting: "Submitting...",
     success: "Chargeback intake received. The case team will review the evidence set and follow up with next steps.",
     error: "Submission failed. Please reduce file size and try again.",
+    sourceTitle: "Source Intelligence",
+    sourceCopy: "This intake was opened from an insight article. The source slug will be attached to the submission.",
     select: "Select",
     urgency: "Chargeback intake submitted",
     sensitive: "Sensitive materials may be involved",
@@ -81,6 +83,8 @@ const content = {
     submitting: "提交中...",
     success: "已收到拒付证据调查表。项目团队会审查证据集，并跟进下一步。",
     error: "提交失败。请压缩文件大小后重试。",
+    sourceTitle: "来源情报",
+    sourceCopy: "该资料表从情报文章进入，提交时会附带来源 slug，便于后续判断案件语境。",
     select: "请选择",
     urgency: "已提交拒付调查表",
     sensitive: "可能涉及敏感材料",
@@ -91,6 +95,7 @@ const content = {
 
 export default function ChargebackIntakePage() {
   const [locale, setLocaleState] = useState<Locale>("en");
+  const [sourceSlug, setSourceSlug] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const t = content[locale];
 
@@ -103,6 +108,9 @@ export default function ChargebackIntakePage() {
         : "en";
     setLocaleState(nextLocale);
     document.documentElement.lang = nextLocale === "zh" ? "zh-CN" : "en";
+
+    const params = new URLSearchParams(window.location.search);
+    setSourceSlug(params.get("source") || "");
   }, []);
 
   function setLocale(nextLocale: Locale) {
@@ -160,6 +168,15 @@ export default function ChargebackIntakePage() {
         </div>
 
         <form className="grid gap-6 border border-blue-900/10 bg-white p-8" onSubmit={handleSubmit}>
+          {sourceSlug ? (
+            <div className="border-l-2 border-blue-950 bg-slate-50 py-4 pl-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.sourceTitle}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-600">{t.sourceCopy}</p>
+              <p className="mt-2 font-[family-name:var(--font-mono)] text-xs text-slate-500">{sourceSlug}</p>
+            </div>
+          ) : null}
+          <input name="sourceInsightSlug" type="hidden" value={sourceSlug} />
+
           <div className="grid gap-5 md:grid-cols-3">
             <Field label={t.name} name="name" required />
             <Field label={t.email} name="email" required type="email" />

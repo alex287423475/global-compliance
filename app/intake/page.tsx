@@ -18,6 +18,8 @@ const content = {
     noticeTitle: "Material Safety Notice",
     notice:
       "Do not upload unrelated personal data. Redact nonessential customer information where possible. For highly sensitive matters, request an NDA before submitting full evidence files. Formal submissions: intake@qqbytran.com.",
+    sourceTitle: "Source Context",
+    sourceCopy: "This intake center was opened from an insight article. Choose the closest form below or request a diagnostic review if the case type is not yet clear.",
     badge: "Intake",
     openForm: "Open form",
     gated: "Available after review",
@@ -77,6 +79,8 @@ const content = {
       "请在完成初步诊断或收到项目团队指引后使用这些表单。每个表单对应一种案件类型，确保证据文件结构清晰、材料相关、便于审阅。",
     noticeTitle: "材料安全提示",
     notice: "请勿上传无关个人信息。可先脱敏客户资料；如涉及高度敏感材料，请先申请 NDA 后再提交完整证据文件。正式材料提交：intake@qqbytran.com。",
+    sourceTitle: "来源语境",
+    sourceCopy: "该资料中心从情报文章进入。请在下方选择最接近的表单；如果案件类型尚不清晰，先预约合规风险诊断。",
     badge: "资料表",
     openForm: "打开表单",
     gated: "诊断后开放",
@@ -129,6 +133,7 @@ const content = {
 
 export default function IntakeIndexPage() {
   const [locale, setLocaleState] = useState<Locale>("en");
+  const [sourceContext, setSourceContext] = useState<{ source: string; topic: string }>({ source: "", topic: "" });
   const t = content[locale];
 
   useEffect(() => {
@@ -140,6 +145,12 @@ export default function IntakeIndexPage() {
         : "en";
     setLocaleState(nextLocale);
     document.documentElement.lang = nextLocale === "zh" ? "zh-CN" : "en";
+
+    const params = new URLSearchParams(window.location.search);
+    setSourceContext({
+      source: params.get("source") || "",
+      topic: params.get("topic") || "",
+    });
   }, []);
 
   function setLocale(nextLocale: Locale) {
@@ -167,6 +178,16 @@ export default function IntakeIndexPage() {
             </p>
             <p className="mt-3 text-sm leading-7 text-slate-600">{t.notice}</p>
           </div>
+          {sourceContext.source ? (
+            <div className="mt-6 border-l-2 border-blue-950 bg-white py-4 pl-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.sourceTitle}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-600">{t.sourceCopy}</p>
+              <p className="mt-2 font-[family-name:var(--font-mono)] text-xs text-slate-500">
+                {sourceContext.source}
+                {sourceContext.topic ? ` / ${sourceContext.topic}` : ""}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid border border-blue-900/10 bg-white lg:grid-cols-2">
