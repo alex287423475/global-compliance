@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getArticle, insightArticles } from "../../../content/insights";
+import { getInsightTopicByCategory } from "../../../content/insight-topics";
 import InsightArticleClient from "./InsightArticleClient";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.qqbytran.com";
@@ -83,6 +84,7 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
     .slice(0, 3);
   const imageUrl = article.ogImage || article.coverImage;
   const absoluteImageUrl = imageUrl ? `${siteUrl}${imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`}` : undefined;
+  const topic = getInsightTopicByCategory(article.category);
 
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -140,6 +142,12 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
       {
         "@type": "ListItem",
         position: 3,
+        name: topic?.title || article.category,
+        item: topic ? `${siteUrl}/insights/topics/${topic.slug}` : `${siteUrl}/insights`,
+      },
+      {
+        "@type": "ListItem",
+        position: 4,
         name: article.title,
         item: `${siteUrl}/insights/${article.slug}`,
       },

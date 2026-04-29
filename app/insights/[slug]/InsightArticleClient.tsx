@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { InsightArticle, InsightCard, InsightFaqItem, InsightTocItem } from "../../../content/insights";
+import { getInsightTopicByCategory } from "../../../content/insight-topics";
 import SiteHeader from "../../components/SiteHeader";
 
 type Locale = "en" | "zh";
@@ -41,6 +42,15 @@ const copy = {
     requestReview: "Request Diagnostic Review",
     openIntake: "Open Intake Form",
     evidenceBox: "Evidence file checklist",
+    caseFit: "Case Fit",
+    caseFitTitle:
+      "Use this article when the issue is already tied to money, account access, policy approval, or submission deadlines.",
+    caseFitItems: [
+      "A live platform, gateway, buyer, or regulator notice exists",
+      "Your public wording needs to match screenshots and records",
+      "The next response must be defensible, not merely fluent",
+    ],
+    topicArchive: "Open Topic Archive",
     evidenceItems: [
       "Platform notice or gateway email",
       "Policy-page screenshots with dates",
@@ -78,6 +88,14 @@ const copy = {
     requestReview: "预约合规风险诊断",
     openIntake: "打开资料收集表",
     evidenceBox: "证据文件清单",
+    caseFit: "案件适配",
+    caseFitTitle: "当问题已经关联资金、账号权限、政策审核或提交截止时间时，适合使用本文。",
+    caseFitItems: [
+      "已经存在真实的平台、网关、买家或监管通知",
+      "公开表述需要与截图和记录保持一致",
+      "下一次回应必须可防御，而不只是语言流畅",
+    ],
+    topicArchive: "打开主题归档",
     evidenceItems: ["平台通知或支付网关邮件", "带日期的政策页截图", "订单、履约和客服记录", "回应草稿或申诉措辞"],
     previous: "上一篇",
     next: "下一篇",
@@ -181,6 +199,7 @@ export default function InsightArticleClient({
   const toc = localizedToc(locale, article.toc);
   const faq = localizedFaq(locale, article.faq);
   const readMinutes = useMemo(() => estimateReadMinutes(markdownBody), [markdownBody]);
+  const topicHref = getTopicHref(article.category);
 
   return (
     <main className="min-h-screen bg-slate-50 text-blue-950">
@@ -197,7 +216,9 @@ export default function InsightArticleClient({
               {t.insights}
             </a>
             <span>/</span>
-            <span className="text-red-800">{categoryLabel(article.category, locale)}</span>
+            <a className="text-red-800 transition-colors hover:text-blue-950" href={topicHref}>
+              {categoryLabel(article.category, locale)}
+            </a>
           </nav>
 
           <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
@@ -228,6 +249,38 @@ export default function InsightArticleClient({
 
         <div className="mx-auto mt-14 grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
           <div className="min-w-0">
+            <section className="mb-10 grid gap-6 border border-blue-900/10 bg-white p-6 lg:grid-cols-[0.8fr_1fr]">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.caseFit}</p>
+                <h2 className="mt-4 font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
+                  {t.caseFitTitle}
+                </h2>
+              </div>
+              <div>
+                <ul className="space-y-3 text-sm leading-7 text-slate-600">
+                  {t.caseFitItems.map((item) => (
+                    <li className="border-l-2 border-red-800 pl-4" key={item}>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <a
+                    className="inline-flex items-center justify-center border border-blue-950 bg-transparent px-6 py-3 text-xs font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                    href="/#checkout"
+                  >
+                    {t.requestReview}
+                  </a>
+                  <a
+                    className="inline-flex items-center justify-center border border-slate-300 bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                    href="/intake"
+                  >
+                    {t.openIntake}
+                  </a>
+                </div>
+              </div>
+            </section>
+
             <div className="mb-10 border-l-2 border-red-800 bg-red-50/50 py-5 pl-6">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-800">{t.redline}</p>
               <div className="mt-5 flex flex-wrap gap-3">
@@ -348,6 +401,31 @@ export default function InsightArticleClient({
                 </nav>
               </div>
             ) : null}
+
+            <div className="border border-blue-900/10 bg-white p-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.nextStep}</p>
+              <p className="mt-4 text-sm font-bold leading-7 text-blue-950">{t.nextStepTitle}</p>
+              <div className="mt-5 grid gap-3">
+                <a
+                  className="inline-flex items-center justify-center border border-blue-950 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                  href="/#checkout"
+                >
+                  {t.requestReview}
+                </a>
+                <a
+                  className="inline-flex items-center justify-center border border-slate-300 bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                  href="/intake"
+                >
+                  {t.openIntake}
+                </a>
+                <a
+                  className="inline-flex items-center justify-center border border-slate-300 bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                  href={topicHref}
+                >
+                  {t.topicArchive}
+                </a>
+              </div>
+            </div>
 
             <div className="border border-blue-900/10 bg-white p-6">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.evidenceBox}</p>
@@ -491,6 +569,11 @@ function categoryLabel(category: string, locale: Locale) {
   const labels = categoryLabels[category];
   if (!labels) return category;
   return locale === "zh" ? labels.zh : labels.en;
+}
+
+function getTopicHref(category: string) {
+  const topic = getInsightTopicByCategory(category);
+  return topic ? `/insights/topics/${topic.slug}` : "/insights/topics";
 }
 
 function ArticlePager({
