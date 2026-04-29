@@ -1,6 +1,7 @@
 "use client";
 
 import { insightArticles } from "../../content/insights";
+import { getInsightTopicByCategory } from "../../content/insight-topics";
 import { useEffect, useMemo, useState } from "react";
 import SiteHeader from "../components/SiteHeader";
 
@@ -145,6 +146,7 @@ const copy = {
     clusterCopy:
       "Each cluster groups articles by commercial risk, not by generic content category. That keeps the archive useful when it grows from five articles to hundreds.",
     clusterOpen: "Open cluster",
+    clusterTopic: "Topic page",
     searchLabel: "Search intelligence",
     searchPlaceholder: "Search PayPal, Stripe, POA, UFLPA, chargeback...",
     riskFilter: "Risk",
@@ -205,6 +207,7 @@ const copy = {
     clusterCopy:
       "每个集群按商业风险组织文章，而不是按泛泛内容分类。这样当文章从 5 篇增长到几百篇时，情报库仍然好用。",
     clusterOpen: "打开集群",
+    clusterTopic: "主题页",
     searchLabel: "搜索情报",
     searchPlaceholder: "搜索 PayPal、Stripe、POA、UFLPA、拒付...",
     riskFilter: "风险",
@@ -448,12 +451,13 @@ export default function InsightsPage() {
               <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t.scopeLabel}</p>
               <div className="flex max-w-4xl flex-wrap gap-3">
                 {categoryDefs.slice(0, 8).map((category) => (
-                  <span
-                    className="border border-blue-900/10 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700"
+                  <a
+                    className="border border-blue-900/10 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                    href={getTopicHref(category.value)}
                     key={category.value}
                   >
                     {locale === "zh" ? category.zh : category.en}
-                  </span>
+                  </a>
                 ))}
               </div>
             </div>
@@ -572,6 +576,12 @@ export default function InsightsPage() {
                     >
                       {t.clusterOpen}
                     </button>
+                    <a
+                      className="border border-blue-900/10 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                      href={getTopicHref(cluster.category)}
+                    >
+                      {t.clusterTopic}
+                    </a>
                     {cluster.leadArticle ? (
                       <a
                         className="border border-blue-900/10 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
@@ -903,6 +913,11 @@ function getCategoryLabel(categoryValue: string, locale: Locale) {
   const category = categoryDefs.find((item) => item.value === categoryValue);
   if (!category) return categoryValue;
   return locale === "zh" ? category.zh : category.en;
+}
+
+function getTopicHref(categoryValue: string) {
+  const topic = getInsightTopicByCategory(categoryValue);
+  return topic ? `/insights/topics/${topic.slug}` : "/insights";
 }
 
 function Meta({ label, value }: { label: string; value: string }) {

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { insightArticles } from "../content/insights";
+import { insightTopics } from "../content/insight-topics";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.qqbytran.com";
 
@@ -39,5 +40,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: article.riskLevel === "Critical" ? 0.85 : 0.75,
   }));
 
-  return [...staticRoutes, ...insightRoutes];
+  const topicRoutes: MetadataRoute.Sitemap = insightTopics.map((topic) => ({
+    url: `${siteUrl}/insights/topics/${topic.slug}`,
+    lastModified: now,
+    changeFrequency: "weekly",
+    priority: 0.7,
+  }));
+
+  return [...staticRoutes, ...topicRoutes, ...insightRoutes];
 }
