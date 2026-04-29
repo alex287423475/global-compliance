@@ -9,17 +9,44 @@ import SiteHeader from "../../components/SiteHeader";
 
 type Locale = "en" | "zh";
 
+const categoryLabels: Record<string, { en: string; zh: string }> = {
+  "Payment Risk": { en: "Payment Risk", zh: "支付风控" },
+  "Marketplace Appeal": { en: "Marketplace Appeal", zh: "平台申诉" },
+  "Market Entry": { en: "Market Entry", zh: "市场准入" },
+  "Supply Chain": { en: "Supply Chain", zh: "供应链" },
+  "IP Defense": { en: "IP Defense", zh: "知识产权" },
+  "Crisis PR": { en: "Crisis PR", zh: "危机公关" },
+  "Capital Documents": { en: "Capital Documents", zh: "资本文书" },
+  "B2B Contracts": { en: "B2B Contracts", zh: "B2B 合同" },
+  "Tax & Audit": { en: "Tax & Audit", zh: "税务审计" },
+  "Data Privacy": { en: "Data Privacy", zh: "数据隐私" },
+};
+
 const copy = {
   en: {
+    home: "Home",
+    insights: "Insights",
     updated: "Updated",
     readTime: "Read Time",
+    market: "Market",
+    risk: "Risk",
     redline: "Redline Terms",
     cards: "Intelligence Cards",
     toc: "On This Page",
     faq: "FAQ",
     nextStep: "Next Step",
-    nextStepTitle: "Need this risk reviewed against your own materials",
+    nextStepTitle: "Need this risk reviewed against your own materials?",
+    nextStepCopy:
+      "Submit the notice, policy file, order record, screenshots, or appeal draft. We will map the article's risk pattern against the evidence you actually control.",
     requestReview: "Request Diagnostic Review",
+    openIntake: "Open Intake Form",
+    evidenceBox: "Evidence file checklist",
+    evidenceItems: [
+      "Platform notice or gateway email",
+      "Policy-page screenshots with dates",
+      "Order, fulfillment, and support records",
+      "Draft response or appeal language",
+    ],
     previous: "Previous Article",
     next: "Next Article",
     related: "Related Intelligence",
@@ -29,17 +56,29 @@ const copy = {
     evidence: "Evidence",
     action: "Action",
     keywords: "Keywords",
+    articleType: "Intelligence Brief",
+    disclaimer:
+      "This article is a compliance-intelligence resource, not jurisdiction-specific legal advice. Live disputes should be reviewed against the actual notice, evidence file, and submission deadline.",
   },
   zh: {
+    home: "首页",
+    insights: "情报库",
     updated: "更新日期",
     readTime: "阅读时长",
+    market: "市场",
+    risk: "风险",
     redline: "红线词",
     cards: "情报卡",
     toc: "本文目录",
     faq: "常见问题",
     nextStep: "下一步",
-    nextStepTitle: "需要结合你自己的材料做一轮风险诊断",
+    nextStepTitle: "需要结合你自己的材料做一轮风险诊断？",
+    nextStepCopy:
+      "提交平台通知、政策文件、订单记录、截图或申诉草稿。我们会把文章中的风险模式映射到你真实掌握的证据上。",
     requestReview: "预约合规风险诊断",
+    openIntake: "打开资料收集表",
+    evidenceBox: "证据文件清单",
+    evidenceItems: ["平台通知或支付网关邮件", "带日期的政策页截图", "订单、履约和客服记录", "回应草稿或申诉措辞"],
     previous: "上一篇",
     next: "下一篇",
     related: "关联情报",
@@ -49,6 +88,9 @@ const copy = {
     evidence: "证据",
     action: "动作",
     keywords: "关键词",
+    articleType: "情报简报",
+    disclaimer:
+      "本文是合规情报资源，不构成特定司法辖区法律意见。真实争议应结合平台通知、证据文件和提交截止时间进行单独审阅。",
   },
 };
 
@@ -120,11 +162,7 @@ export default function InsightArticleClient({
   useEffect(() => {
     const saved = window.localStorage.getItem("gbc-locale");
     const nextLocale =
-      saved === "en" || saved === "zh"
-        ? saved
-        : navigator.language.toLowerCase().startsWith("zh")
-          ? "zh"
-          : "en";
+      saved === "en" || saved === "zh" ? saved : navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
     setLocaleState(nextLocale);
     document.documentElement.lang = nextLocale === "zh" ? "zh-CN" : "en";
   }, []);
@@ -150,8 +188,20 @@ export default function InsightArticleClient({
 
       <article className="mx-auto max-w-7xl px-6 py-20 lg:px-10">
         <div className="mx-auto max-w-4xl">
+          <nav className="mb-10 flex flex-wrap items-center gap-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <a className="transition-colors hover:text-blue-950" href="/">
+              {t.home}
+            </a>
+            <span>/</span>
+            <a className="transition-colors hover:text-blue-950" href="/insights">
+              {t.insights}
+            </a>
+            <span>/</span>
+            <span className="text-red-800">{categoryLabel(article.category, locale)}</span>
+          </nav>
+
           <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-            {article.category} / {article.market}
+            {t.articleType} / {categoryLabel(article.category, locale)} / {article.market}
           </p>
 
           <h1 className="font-[family-name:var(--font-serif)] text-5xl font-semibold leading-tight text-blue-950 md:text-7xl">
@@ -164,33 +214,19 @@ export default function InsightArticleClient({
 
           {article.coverImage ? (
             <div className="mt-10 border border-blue-900/10 bg-white p-2">
-              <img
-                alt={article.imageAlt || title}
-                className="aspect-[16/9] w-full object-cover"
-                src={article.coverImage}
-              />
+              <img alt={article.imageAlt || title} className="aspect-[16/9] w-full object-cover" src={article.coverImage} />
             </div>
           ) : null}
 
-          <div className="mt-8 flex flex-wrap gap-6 border-y border-blue-900/10 py-5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-            <div>
-              <span className="text-slate-400">{t.updated}</span>
-              <div className="mt-2 text-blue-950">{article.updatedAt}</div>
-            </div>
-            <div>
-              <span className="text-slate-400">{t.readTime}</span>
-              <div className="mt-2 text-blue-950">
-                {readMinutes} {t.minutes}
-              </div>
-            </div>
-            <div>
-              <span className="text-slate-400">Risk</span>
-              <div className="mt-2 text-red-800">{article.riskLevel}</div>
-            </div>
+          <div className="mt-8 grid gap-4 border-y border-blue-900/10 py-5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 sm:grid-cols-4">
+            <ArticleMeta label={t.updated} value={article.updatedAt} />
+            <ArticleMeta label={t.readTime} value={`${readMinutes} ${t.minutes}`} />
+            <ArticleMeta label={t.market} value={article.market} />
+            <ArticleMeta emphasis label={t.risk} value={article.riskLevel} />
           </div>
         </div>
 
-        <div className="mx-auto mt-14 grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
+        <div className="mx-auto mt-14 grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
           <div className="min-w-0">
             <div className="mb-10 border-l-2 border-red-800 bg-red-50/50 py-5 pl-6">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-800">{t.redline}</p>
@@ -253,9 +289,7 @@ export default function InsightArticleClient({
                 <div className="mt-6 space-y-6">
                   {faq.map((item) => (
                     <div className="border border-blue-900/10 bg-white p-6" key={item.question}>
-                      <h2 className="font-[family-name:var(--font-serif)] text-2xl font-medium text-blue-950">
-                        {item.question}
-                      </h2>
+                      <h2 className="font-[family-name:var(--font-serif)] text-2xl font-medium text-blue-950">{item.question}</h2>
                       <div className="mt-4 space-y-4">
                         {splitParagraphs(item.answer).map((paragraph) => (
                           <p className="text-base leading-8 text-slate-600" key={paragraph}>
@@ -269,27 +303,29 @@ export default function InsightArticleClient({
               </section>
             ) : null}
 
-            <ArticlePager
-              labels={{ next: t.next, previous: t.previous }}
-              locale={locale}
-              nextArticle={nextArticle}
-              previousArticle={previousArticle}
-            />
+            <ArticlePager labels={{ next: t.next, previous: t.previous }} locale={locale} nextArticle={nextArticle} previousArticle={previousArticle} />
 
             <ArticleRail articles={relatedArticles} label={t.related} locale={locale} readLabel={t.read} />
             <ArticleRail articles={recommendedArticles} label={t.recommended} locale={locale} readLabel={t.read} />
 
             <div className="mt-16 border-t border-blue-900/10 pt-8">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.nextStep}</p>
-              <h2 className="mt-4 font-[family-name:var(--font-serif)] text-3xl font-medium text-blue-950">
-                {t.nextStepTitle}
-              </h2>
-              <a
-                className="mt-7 inline-flex border border-blue-950 bg-transparent px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
-                href="/#checkout"
-              >
-                {t.requestReview}
-              </a>
+              <h2 className="mt-4 font-[family-name:var(--font-serif)] text-3xl font-medium text-blue-950">{t.nextStepTitle}</h2>
+              <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-600">{t.nextStepCopy}</p>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <a
+                  className="inline-flex items-center justify-center border border-blue-950 bg-transparent px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                  href="/#checkout"
+                >
+                  {t.requestReview}
+                </a>
+                <a
+                  className="inline-flex items-center justify-center border border-slate-300 bg-white px-8 py-3 text-sm font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                  href="/intake"
+                >
+                  {t.openIntake}
+                </a>
+              </div>
             </div>
           </div>
 
@@ -314,6 +350,17 @@ export default function InsightArticleClient({
             ) : null}
 
             <div className="border border-blue-900/10 bg-white p-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.evidenceBox}</p>
+              <ul className="mt-5 space-y-3 text-sm leading-6 text-slate-600">
+                {t.evidenceItems.map((item) => (
+                  <li className="border-l-2 border-red-800 pl-3" key={item}>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="border border-blue-900/10 bg-white p-6">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.keywords}</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {article.relatedKeywords.map((term) => (
@@ -323,10 +370,21 @@ export default function InsightArticleClient({
                 ))}
               </div>
             </div>
+
+            <p className="border border-blue-900/10 bg-white p-5 text-xs leading-6 text-slate-500">{t.disclaimer}</p>
           </aside>
         </div>
       </article>
     </main>
+  );
+}
+
+function ArticleMeta({ emphasis, label, value }: { emphasis?: boolean; label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-slate-400">{label}</span>
+      <div className={`mt-2 ${emphasis ? "text-red-800" : "text-blue-950"}`}>{value}</div>
+    </div>
   );
 }
 
@@ -392,8 +450,7 @@ function localizedText(locale: Locale, localized: string | undefined, fallback: 
 
 function looksMojibake(text?: string) {
   if (!text) return false;
-  const markers = ["鍏", "鍚", "鏂", "鐨", "璇", "绔", "€", "鎺", "閫", "寮", "缁", "绾"];
-  return markers.some((marker) => text.includes(marker));
+  return /�|閸|閺|閻|鐠|鈧|闁|瀵|缂|€/.test(text);
 }
 
 function splitParagraphs(text?: string) {
@@ -428,6 +485,12 @@ function flattenChildren(node: ReactNode): string {
     return flattenChildren((node as { props?: { children?: ReactNode } }).props?.children);
   }
   return "";
+}
+
+function categoryLabel(category: string, locale: Locale) {
+  const labels = categoryLabels[category];
+  if (!labels) return category;
+  return locale === "zh" ? labels.zh : labels.en;
 }
 
 function ArticlePager({
@@ -474,9 +537,7 @@ function PagerLink({
       href={`/insights/${article.slug}`}
     >
       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{label}</p>
-      <p className="mt-3 text-sm font-bold leading-6 text-blue-950">
-        {localizedText(locale, article.zhTitle, article.title)}
-      </p>
+      <p className="mt-3 text-sm font-bold leading-6 text-blue-950">{localizedText(locale, article.zhTitle, article.title)}</p>
     </a>
   );
 }
@@ -506,15 +567,11 @@ function ArticleRail({
           >
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-800">
-                {article.category}
+                {categoryLabel(article.category, locale)}
               </span>
-              <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase text-red-800">
-                {article.riskLevel}
-              </span>
+              <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase text-red-800">{article.riskLevel}</span>
             </div>
-            <h3 className="mt-4 text-base font-bold leading-7 text-blue-950">
-              {localizedText(locale, article.zhTitle, article.title)}
-            </h3>
+            <h3 className="mt-4 text-base font-bold leading-7 text-blue-950">{localizedText(locale, article.zhTitle, article.title)}</h3>
             <p className="mt-2 text-sm leading-7 text-slate-600">{localizedText(locale, article.zhDek, article.dek)}</p>
             <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">{readLabel}</p>
           </a>

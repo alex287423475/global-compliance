@@ -67,16 +67,19 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
   const previousArticle = currentIndex > 0 ? insightArticles[currentIndex - 1] : undefined;
   const nextArticle =
     currentIndex >= 0 && currentIndex < insightArticles.length - 1 ? insightArticles[currentIndex + 1] : undefined;
-  const relatedArticles = insightArticles
-    .filter((item) => item.slug !== article.slug && item.category === article.category)
+  const relatedArticles = scoreRelatedArticles(article)
     .slice(0, 3);
   const recommendedArticles = insightArticles
     .filter(
       (item) =>
         item.slug !== article.slug &&
-        item.category !== article.category &&
         !relatedArticles.some((related) => related.slug === item.slug),
     )
+    .sort((first, second) => {
+      const firstRisk = first.riskLevel === "Critical" ? 0 : first.riskLevel === "High" ? 1 : 2;
+      const secondRisk = second.riskLevel === "Critical" ? 0 : second.riskLevel === "High" ? 1 : 2;
+      return firstRisk - secondRisk || second.updatedAt.localeCompare(first.updatedAt);
+    })
     .slice(0, 3);
   const imageUrl = article.ogImage || article.coverImage;
   const absoluteImageUrl = imageUrl ? `${siteUrl}${imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`}` : undefined;
@@ -118,6 +121,31 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
     })),
   };
 
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: siteUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Insights",
+        item: `${siteUrl}/insights`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: article.title,
+        item: `${siteUrl}/insights/${article.slug}`,
+      },
+    ],
+  };
+
   return (
     <>
       <script
@@ -132,6 +160,12 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
         }}
         type="application/ld+json"
       />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd),
+        }}
+        type="application/ld+json"
+      />
       <InsightArticleClient
         article={article}
         nextArticle={nextArticle}
@@ -141,4 +175,23 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
       />
     </>
   );
+}
+
+function scoreRelatedArticles(article: NonNullable<ReturnType<typeof getArticle>>) {
+  return insightArticles
+    .filter((item) => item.slug !== article.slug)
+    .map((item) => {
+      const keywordOverlap = item.relatedKeywords.filter((keyword) =>
+        article.relatedKeywords.some((sourceKeyword) => sourceKeyword.toLowerCase() === keyword.toLowerCase()),
+      ).length;
+      const score =
+        (item.category === article.category ? 8 : 0) +
+        (item.market === article.market ? 3 : 0) +
+        (item.riskLevel === article.riskLevel ? 2 : 0) +
+        keywordOverlap;
+      return { item, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((first, second) => second.score - first.score || second.item.updatedAt.localeCompare(first.item.updatedAt))
+    .map(({ item }) => item);
 }
