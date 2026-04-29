@@ -63,6 +63,68 @@ const quickPathDefs = [
   },
 ];
 
+const topicClusterDefs = [
+  {
+    title: "Payment risk and dispute evidence",
+    zhTitle: "支付风控与争议证据",
+    description: "PayPal, Stripe, chargeback, refund-policy, and checkout-language articles.",
+    zhDescription: "PayPal、Stripe、拒付、退款政策与结账页措辞文章。",
+    category: "Payment Risk",
+    query: "chargeback",
+  },
+  {
+    title: "Marketplace appeal structure",
+    zhTitle: "平台申诉结构",
+    description: "Amazon POA, root-cause statements, corrective actions, and reinstatement logic.",
+    zhDescription: "Amazon POA、根因陈述、整改措施与恢复销售逻辑。",
+    category: "Marketplace Appeal",
+    query: "poa",
+  },
+  {
+    title: "Supply-chain and entry files",
+    zhTitle: "供应链与准入文件",
+    description: "CBAM, UFLPA, traceability, origin evidence, and clean-statement wording.",
+    zhDescription: "CBAM、UFLPA、溯源、原产地证据与清白声明措辞。",
+    category: "Supply Chain",
+    query: "statement",
+  },
+  {
+    title: "Policy language and customer proof",
+    zhTitle: "政策语言与客户证据",
+    description: "Listing, privacy, policy, support, and customer-facing evidence alignment.",
+    zhDescription: "Listing、隐私、政策、客服与客户可见证据的一致性。",
+    category: "Data Privacy",
+    query: "policy",
+  },
+];
+
+const indexFaqDefs = [
+  {
+    question: "What is the compliance intelligence library for?",
+    zhQuestion: "合规情报库的用途是什么？",
+    answer:
+      "It helps cross-border operators understand the wording, evidence, and policy patterns that often appear before payment review, marketplace appeal, supply-chain scrutiny, or customer disputes.",
+    zhAnswer:
+      "它帮助跨境经营者理解在支付审核、平台申诉、供应链审查或客户争议之前常见的措辞、证据和政策模式。",
+  },
+  {
+    question: "Should I use these articles as legal advice?",
+    zhQuestion: "这些文章可以直接当法律意见使用吗？",
+    answer:
+      "No. The articles are risk-intelligence resources. A live case still needs to be reviewed against the actual notice, contract, order record, policy page, screenshots, and deadline.",
+    zhAnswer:
+      "不可以。文章是风险情报资源。真实案件仍然需要结合平台通知、合同、订单记录、政策页、截图和截止时间单独审阅。",
+  },
+  {
+    question: "When should I submit an intake form?",
+    zhQuestion: "什么时候应该提交资料收集表？",
+    answer:
+      "Submit an intake form when you already have a payment hold, appeal deadline, rejected policy, buyer dispute, takedown notice, or a file that must be submitted to a platform, gateway, buyer, or regulator.",
+    zhAnswer:
+      "当你已经遇到资金冻结、申诉截止、政策被拒、买家争议、下架通知，或需要向平台、支付网关、买家、监管方提交文件时，就应该提交资料收集表。",
+  },
+];
+
 const copy = {
   en: {
     eyebrow: "Compliance Intelligence Library",
@@ -78,6 +140,11 @@ const copy = {
     quickPathsTitle: "Route the reader by the crisis they already recognize",
     quickPathsCopy:
       "Most visitors do not arrive looking for a generic article. They arrive with a payment hold, an appeal deadline, a policy review, or a buyer dispute. These paths make the library easier to scan.",
+    clusterEyebrow: "Topic clusters",
+    clusterTitle: "Keep the library navigable as the archive grows",
+    clusterCopy:
+      "Each cluster groups articles by commercial risk, not by generic content category. That keeps the archive useful when it grows from five articles to hundreds.",
+    clusterOpen: "Open cluster",
     searchLabel: "Search intelligence",
     searchPlaceholder: "Search PayPal, Stripe, POA, UFLPA, chargeback...",
     riskFilter: "Risk",
@@ -117,6 +184,7 @@ const copy = {
       "The library explains common risk patterns. A private review maps those patterns against your actual evidence, platform notice, policy text, and submission deadline.",
     ctaPrimary: "Request diagnostic review",
     ctaSecondary: "Open intake forms",
+    faqEyebrow: "Library FAQ",
   },
   zh: {
     eyebrow: "Compliance Intelligence Library",
@@ -132,6 +200,11 @@ const copy = {
     quickPathsTitle: "按客户已经意识到的危机场景分流",
     quickPathsCopy:
       "大多数访客不是为了泛泛读文章而来。他们通常已经遇到支付冻结、申诉截止、政策审核或买家争议。快速路径能让情报库更容易被扫描和使用。",
+    clusterEyebrow: "主题集群",
+    clusterTitle: "让情报库在文章增长后仍然容易导航",
+    clusterCopy:
+      "每个集群按商业风险组织文章，而不是按泛泛内容分类。这样当文章从 5 篇增长到几百篇时，情报库仍然好用。",
+    clusterOpen: "打开集群",
     searchLabel: "搜索情报",
     searchPlaceholder: "搜索 PayPal、Stripe、POA、UFLPA、拒付...",
     riskFilter: "风险",
@@ -171,6 +244,7 @@ const copy = {
       "情报库解释常见风险模式。私密评估会把这些模式映射到你的真实证据、平台通知、政策文本和提交截止时间上。",
     ctaPrimary: "预约诊断",
     ctaSecondary: "打开资料收集表",
+    faqEyebrow: "情报库 FAQ",
   },
 };
 
@@ -217,6 +291,15 @@ export default function InsightsPage() {
     setActiveRisk("All");
     setActiveMarket("All");
     setSearchQuery(path.query);
+    setSortKey("risk");
+    setCurrentPage(1);
+  }
+
+  function selectTopicCluster(cluster: (typeof topicClusterDefs)[number]) {
+    setActiveCategory(cluster.category);
+    setActiveRisk("All");
+    setActiveMarket("All");
+    setSearchQuery("");
     setSortKey("risk");
     setCurrentPage(1);
   }
@@ -283,6 +366,23 @@ export default function InsightsPage() {
 
   const redlineTerms = Array.from(new Set(insightArticles.flatMap((article) => article.redlineTerms))).slice(0, 8);
   const marketOptions = useMemo(() => Array.from(new Set(insightArticles.map((article) => article.market))).sort(), []);
+  const topicClusters = useMemo(
+    () =>
+      topicClusterDefs.map((cluster) => {
+        const articles = insightArticles.filter((article) => {
+          const keywordMatch = article.relatedKeywords.some((keyword) =>
+            keyword.toLowerCase().includes(cluster.query.toLowerCase()),
+          );
+          return article.category === cluster.category || keywordMatch;
+        });
+        return {
+          ...cluster,
+          articles,
+          leadArticle: articles[0],
+        };
+      }),
+    [],
+  );
   const hasActiveFilters =
     activeCategory !== "All" || activeRisk !== "All" || activeMarket !== "All" || Boolean(searchQuery.trim()) || sortKey !== "newest";
 
@@ -315,10 +415,24 @@ export default function InsightsPage() {
     ],
   };
 
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: indexFaqDefs.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 text-blue-950">
       <script dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} type="application/ld+json" />
       <script dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} type="application/ld+json" />
+      <script dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} type="application/ld+json" />
       <SiteHeader locale={locale} setLocale={setLocale} />
 
       <section className="mx-auto max-w-7xl px-6 py-20 lg:px-10">
@@ -422,6 +536,54 @@ export default function InsightsPage() {
                 </span>
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="mt-10 border border-blue-900/10 bg-white p-7">
+          <div className="grid gap-6 lg:grid-cols-[0.62fr_1fr]">
+            <div>
+              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.clusterEyebrow}</p>
+              <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
+                {t.clusterTitle}
+              </h2>
+              <p className="mt-5 text-sm leading-7 text-slate-600">{t.clusterCopy}</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {topicClusters.map((cluster) => (
+                <div className="border border-blue-900/10 bg-slate-50 p-5" key={cluster.category}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-base font-bold leading-7 text-blue-950">
+                        {locale === "zh" ? cluster.zhTitle : cluster.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {locale === "zh" ? cluster.zhDescription : cluster.description}
+                      </p>
+                    </div>
+                    <span className="font-[family-name:var(--font-mono)] text-xs font-bold text-red-800">
+                      {cluster.articles.length}
+                    </span>
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      className="border border-blue-950 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                      onClick={() => selectTopicCluster(cluster)}
+                      type="button"
+                    >
+                      {t.clusterOpen}
+                    </button>
+                    {cluster.leadArticle ? (
+                      <a
+                        className="border border-blue-900/10 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                        href={`/insights/${cluster.leadArticle.slug}`}
+                      >
+                        {t.read}
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -581,6 +743,20 @@ export default function InsightsPage() {
                   {String(index + 1).padStart(2, "0")}
                 </p>
                 <p className="mt-4 text-sm leading-7 text-blue-950">{item}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-12 border border-blue-900/10 bg-white p-8">
+          <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.faqEyebrow}</p>
+          <div className="grid gap-6 lg:grid-cols-3">
+            {indexFaqDefs.map((item) => (
+              <div className="border-l-2 border-red-800 pl-5" key={item.question}>
+                <h2 className="font-[family-name:var(--font-serif)] text-2xl font-medium leading-tight text-blue-950">
+                  {locale === "zh" ? item.zhQuestion : item.question}
+                </h2>
+                <p className="mt-4 text-sm leading-7 text-slate-600">{locale === "zh" ? item.zhAnswer : item.answer}</p>
               </div>
             ))}
           </div>
