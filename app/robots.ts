@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/insights", "/intake"],
+        allow: ["/", "/insights", "/insights/feed.xml", "/intake"],
         disallow: ["/api/", "/admin", "/webhook"],
       },
     ],

@@ -6,6 +6,9 @@ export const metadata: Metadata = {
     "Long-form cross-border compliance intelligence on PayPal and Stripe reviews, chargebacks, Amazon POA, market entry, supply-chain declarations, IP defense, crisis response, and capital documents.",
   alternates: {
     canonical: "/insights",
+    types: {
+      "application/rss+xml": "/insights/feed.xml",
+    },
   },
   openGraph: {
     title: "Compliance Intelligence Library | Global Bridge Compliance",
