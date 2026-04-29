@@ -5,8 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import SiteHeader from "../components/SiteHeader";
 
 type Locale = "en" | "zh";
+type SortKey = "newest" | "risk" | "category";
 
 const PAGE_SIZE = 12;
+
+const riskRank = {
+  Critical: 0,
+  High: 1,
+  Medium: 2,
+};
 
 const categoryDefs = [
   { value: "Payment Risk", en: "Payment Risk", zh: "支付风控" },
@@ -21,10 +28,43 @@ const categoryDefs = [
   { value: "Data Privacy", en: "Data Privacy", zh: "数据隐私" },
 ];
 
+const quickPathDefs = [
+  {
+    label: "Payment hold / gateway review",
+    zhLabel: "支付冻结 / 网关审核",
+    description: "Start with PayPal, Stripe, refund-policy, and chargeback language.",
+    zhDescription: "优先查看 PayPal、Stripe、退款政策与拒付语言。",
+    category: "Payment Risk",
+    query: "paypal",
+  },
+  {
+    label: "Amazon POA / marketplace appeal",
+    zhLabel: "Amazon POA / 平台申诉",
+    description: "Find root-cause, corrective-action, and evidence structure guidance.",
+    zhDescription: "查看根因、整改措施与证据结构指南。",
+    category: "Marketplace Appeal",
+    query: "poa",
+  },
+  {
+    label: "Supply-chain statement",
+    zhLabel: "供应链清白声明",
+    description: "Review CBAM, UFLPA, origin evidence, and traceability wording.",
+    zhDescription: "查看 CBAM、UFLPA、原产地证据与溯源措辞。",
+    category: "Supply Chain",
+    query: "uflpa",
+  },
+  {
+    label: "Privacy and policy language",
+    zhLabel: "隐私与政策语言",
+    description: "Map listing, policy, support, and evidence wording into one file.",
+    zhDescription: "把 Listing、政策、客服和证据口径统一到一套文件里。",
+    category: "Data Privacy",
+    query: "listing",
+  },
+];
+
 const copy = {
   en: {
-    brand: "Global Bridge Compliance",
-    back: "Back to site",
     eyebrow: "Compliance Intelligence Library",
     title: "Cross-border compliance intelligence library",
     body:
@@ -34,11 +74,23 @@ const copy = {
     featuredTitle: "Start with the file most likely to create immediate commercial exposure",
     riskBoard: "Risk Board",
     redlineTerms: "Redline terms",
+    quickPathsLabel: "High-intent entry points",
+    quickPathsTitle: "Route the reader by the crisis they already recognize",
+    quickPathsCopy:
+      "Most visitors do not arrive looking for a generic article. They arrive with a payment hold, an appeal deadline, a policy review, or a buyer dispute. These paths make the library easier to scan.",
     searchLabel: "Search intelligence",
     searchPlaceholder: "Search PayPal, Stripe, POA, UFLPA, chargeback...",
+    riskFilter: "Risk",
+    marketFilter: "Market",
+    sortLabel: "Sort",
+    allRisks: "All risks",
+    allMarkets: "All markets",
+    newest: "Newest",
+    severity: "Severity",
+    categorySort: "Category",
+    clearFilters: "Clear filters",
     all: "All",
     articles: "Articles",
-    briefCount: "Briefs",
     filterLabel: "Filter by Category",
     updated: "Updated",
     market: "Market",
@@ -51,6 +103,14 @@ const copy = {
     page: "Page",
     previous: "Previous",
     next: "Next",
+    methodEyebrow: "Editorial standard",
+    methodTitle: "Every article is built to be readable by operators, review teams, and search engines.",
+    methodItems: [
+      "Risk context before recommendations",
+      "Redline language separated from safe wording",
+      "Evidence burden stated before conversion claims",
+      "Private review path after the article exposes the file gap",
+    ],
     ctaEyebrow: "Need a private read?",
     ctaTitle: "Turn a live notice, appeal, or policy file into a controlled response package.",
     ctaCopy:
@@ -59,8 +119,6 @@ const copy = {
     ctaSecondary: "Open intake forms",
   },
   zh: {
-    brand: "全球博译合规",
-    back: "返回官网",
     eyebrow: "Compliance Intelligence Library",
     title: "跨境合规情报库",
     body:
@@ -70,11 +128,23 @@ const copy = {
     featuredTitle: "先看最可能造成即时商业暴露的文件类型",
     riskBoard: "风险看板",
     redlineTerms: "红线词",
+    quickPathsLabel: "高意向入口",
+    quickPathsTitle: "按客户已经意识到的危机场景分流",
+    quickPathsCopy:
+      "大多数访客不是为了泛泛读文章而来。他们通常已经遇到支付冻结、申诉截止、政策审核或买家争议。快速路径能让情报库更容易被扫描和使用。",
     searchLabel: "搜索情报",
     searchPlaceholder: "搜索 PayPal、Stripe、POA、UFLPA、拒付...",
+    riskFilter: "风险",
+    marketFilter: "市场",
+    sortLabel: "排序",
+    allRisks: "全部风险",
+    allMarkets: "全部市场",
+    newest: "最新更新",
+    severity: "风险等级",
+    categorySort: "分类",
+    clearFilters: "清空筛选",
     all: "全部",
     articles: "篇文章",
-    briefCount: "篇",
     filterLabel: "按分类筛选",
     updated: "更新",
     market: "市场",
@@ -87,6 +157,14 @@ const copy = {
     page: "页",
     previous: "上一页",
     next: "下一页",
+    methodEyebrow: "编辑标准",
+    methodTitle: "每篇文章都要同时让经营者、审核团队和搜索引擎读得懂。",
+    methodItems: [
+      "先解释风险语境，再给建议",
+      "把红线语言与安全表达分开",
+      "在转化承诺之前说明证据负担",
+      "文章揭示文件缺口后，再承接私密诊断",
+    ],
     ctaEyebrow: "需要私密判断？",
     ctaTitle: "把真实平台通知、申诉材料或政策文件，转化为可控回应文件包。",
     ctaCopy:
@@ -99,17 +177,17 @@ const copy = {
 export default function InsightsPage() {
   const [locale, setLocaleState] = useState<Locale>("en");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [activeRisk, setActiveRisk] = useState("All");
+  const [activeMarket, setActiveMarket] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
   const t = copy[locale];
 
   useEffect(() => {
     const saved = window.localStorage.getItem("gbc-locale");
-    const nextLocale = saved === "en" || saved === "zh"
-      ? saved
-      : navigator.language.toLowerCase().startsWith("zh")
-        ? "zh"
-        : "en";
+    const nextLocale =
+      saved === "en" || saved === "zh" ? saved : navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
     setLocaleState(nextLocale);
     document.documentElement.lang = nextLocale === "zh" ? "zh-CN" : "en";
   }, []);
@@ -125,29 +203,58 @@ export default function InsightsPage() {
     setCurrentPage(1);
   }
 
-  const filteredArticles = useMemo(
-    () => {
-      const query = searchQuery.trim().toLowerCase();
-      return insightArticles.filter((article) => {
-        const categoryMatch = activeCategory === "All" || article.category === activeCategory;
-        if (!categoryMatch) return false;
-        if (!query) return true;
-        const haystack = [
-          article.title,
-          article.zhTitle,
-          article.summary,
-          article.zhSummary,
-          article.category,
-          article.market,
-          article.riskLevel,
-          ...article.relatedKeywords,
-          ...article.redlineTerms,
-        ].join(" ").toLowerCase();
-        return haystack.includes(query);
-      });
-    },
-    [activeCategory, searchQuery],
-  );
+  function resetFilters() {
+    setActiveCategory("All");
+    setActiveRisk("All");
+    setActiveMarket("All");
+    setSearchQuery("");
+    setSortKey("newest");
+    setCurrentPage(1);
+  }
+
+  function selectQuickPath(path: (typeof quickPathDefs)[number]) {
+    setActiveCategory(path.category);
+    setActiveRisk("All");
+    setActiveMarket("All");
+    setSearchQuery(path.query);
+    setSortKey("risk");
+    setCurrentPage(1);
+  }
+
+  const filteredArticles = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const results = insightArticles.filter((article) => {
+      const categoryMatch = activeCategory === "All" || article.category === activeCategory;
+      const riskMatch = activeRisk === "All" || article.riskLevel === activeRisk;
+      const marketMatch = activeMarket === "All" || article.market === activeMarket;
+      if (!categoryMatch || !riskMatch || !marketMatch) return false;
+      if (!query) return true;
+      const haystack = [
+        article.title,
+        article.zhTitle,
+        article.summary,
+        article.zhSummary,
+        article.category,
+        article.market,
+        article.riskLevel,
+        ...article.relatedKeywords,
+        ...article.redlineTerms,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+
+    return results.sort((first, second) => {
+      if (sortKey === "risk") {
+        return riskRank[first.riskLevel] - riskRank[second.riskLevel] || second.updatedAt.localeCompare(first.updatedAt);
+      }
+      if (sortKey === "category") {
+        return first.category.localeCompare(second.category) || second.updatedAt.localeCompare(first.updatedAt);
+      }
+      return second.updatedAt.localeCompare(first.updatedAt);
+    });
+  }, [activeCategory, activeMarket, activeRisk, searchQuery, sortKey]);
 
   const categoryCounts = useMemo(
     () =>
@@ -175,31 +282,56 @@ export default function InsightsPage() {
     insightArticles[0];
 
   const redlineTerms = Array.from(new Set(insightArticles.flatMap((article) => article.redlineTerms))).slice(0, 8);
+  const marketOptions = useMemo(() => Array.from(new Set(insightArticles.map((article) => article.market))).sort(), []);
+  const hasActiveFilters =
+    activeCategory !== "All" || activeRisk !== "All" || activeMarket !== "All" || Boolean(searchQuery.trim()) || sortKey !== "newest";
 
   const totalPages = Math.max(1, Math.ceil(filteredArticles.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
   const paginatedArticles = filteredArticles.slice(pageStart, pageStart + PAGE_SIZE);
 
+  const collectionJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Compliance Intelligence Library",
+    description: copy.en.body,
+    url: "https://www.qqbytran.com/insights",
+    hasPart: insightArticles.map((article) => ({
+      "@type": "Article",
+      headline: article.title,
+      url: `https://www.qqbytran.com/insights/${article.slug}`,
+      dateModified: article.updatedAt,
+      about: article.category,
+    })),
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://www.qqbytran.com/" },
+      { "@type": "ListItem", position: 2, name: "Insights", item: "https://www.qqbytran.com/insights" },
+    ],
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 text-blue-950">
+      <script dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} type="application/ld+json" />
+      <script dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} type="application/ld+json" />
       <SiteHeader locale={locale} setLocale={setLocale} />
 
       <section className="mx-auto max-w-7xl px-6 py-20 lg:px-10">
         <div className="grid gap-12 border-b border-blue-900/10 pb-14 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="max-w-4xl">
-            <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-              {t.eyebrow}
-            </p>
+            <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.eyebrow}</p>
             <h1 className="font-[family-name:var(--font-serif)] text-5xl font-semibold leading-tight text-blue-950 md:text-6xl">
               {t.title}
             </h1>
             <p className="mt-6 max-w-3xl text-base leading-8 text-slate-600">{t.body}</p>
 
             <div className="mt-8">
-              <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                {t.scopeLabel}
-              </p>
+              <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t.scopeLabel}</p>
               <div className="flex max-w-4xl flex-wrap gap-3">
                 {categoryDefs.slice(0, 8).map((category) => (
                   <span
@@ -214,9 +346,7 @@ export default function InsightsPage() {
           </div>
 
           <div className="border border-blue-900/10 bg-white p-6">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-              {t.riskBoard}
-            </p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.riskBoard}</p>
             <p className="mt-6 font-[family-name:var(--font-serif)] text-5xl font-semibold text-blue-950">
               {insightArticles.length}
             </p>
@@ -224,7 +354,9 @@ export default function InsightsPage() {
             <div className="mt-6 space-y-3 border-t border-blue-900/10 pt-5">
               {riskCounts.map((item) => (
                 <div className="flex items-center justify-between gap-4 text-sm" key={item.risk}>
-                  <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{item.risk}</span>
+                  <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                    {item.risk}
+                  </span>
                   <span className="font-bold text-blue-950">{item.count}</span>
                 </div>
               ))}
@@ -235,15 +367,11 @@ export default function InsightsPage() {
         {featuredArticle ? (
           <section className="mt-12 grid gap-6 border border-blue-900/10 bg-white lg:grid-cols-[0.9fr_1.1fr]">
             <div className="border-b border-blue-900/10 p-7 lg:border-b-0 lg:border-r">
-              <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-                {t.featuredLabel}
-              </p>
+              <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.featuredLabel}</p>
               <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950 md:text-4xl">
                 {t.featuredTitle}
               </h2>
-              <p className="mt-7 mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                {t.redlineTerms}
-              </p>
+              <p className="mt-7 mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t.redlineTerms}</p>
               <div className="flex flex-wrap gap-3">
                 {redlineTerms.map((term) => (
                   <span className="border border-slate-200 bg-slate-100 px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-700" key={term}>
@@ -267,15 +395,38 @@ export default function InsightsPage() {
               <p className="mt-5 text-sm leading-7 text-slate-600">
                 {locale === "zh" ? featuredArticle.zhSummary : featuredArticle.summary}
               </p>
-              <p className="mt-7 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">
-                {t.read}
-              </p>
+              <p className="mt-7 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">{t.read}</p>
             </a>
           </section>
         ) : null}
 
+        <section className="mt-10 grid gap-6 border border-blue-900/10 bg-white p-7 lg:grid-cols-[0.72fr_1fr]">
+          <div>
+            <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.quickPathsLabel}</p>
+            <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
+              {t.quickPathsTitle}
+            </h2>
+            <p className="mt-5 text-sm leading-7 text-slate-600">{t.quickPathsCopy}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {quickPathDefs.map((path) => (
+              <button
+                className="border border-blue-900/10 bg-slate-50 p-5 text-left transition-colors duration-300 hover:border-blue-950 hover:bg-white"
+                key={path.category}
+                onClick={() => selectQuickPath(path)}
+                type="button"
+              >
+                <span className="font-bold text-blue-950">{locale === "zh" ? path.zhLabel : path.label}</span>
+                <span className="mt-3 block text-sm leading-6 text-slate-600">
+                  {locale === "zh" ? path.zhDescription : path.description}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
         <div className="mt-10">
-          <div className="grid gap-5 lg:grid-cols-[0.72fr_1fr]">
+          <div className="grid gap-5 lg:grid-cols-[1fr_180px_180px_180px]">
             <label className="grid gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t.searchLabel}</span>
               <input
@@ -289,31 +440,73 @@ export default function InsightsPage() {
                 value={searchQuery}
               />
             </label>
-            <div>
-              <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                {t.filterLabel}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <CategoryButton active={activeCategory === "All"} count={insightArticles.length} label={t.all} onClick={() => setCategory("All")} />
-                {categoryDefs.map((category) => (
-                  <CategoryButton
-                    active={activeCategory === category.value}
-                    count={categoryCounts.get(category.value) || 0}
-                    disabled={(categoryCounts.get(category.value) || 0) === 0}
-                    key={category.value}
-                    label={locale === "zh" ? category.zh : category.en}
-                    onClick={() => setCategory(category.value)}
-                  />
-                ))}
-              </div>
+            <SelectField
+              label={t.riskFilter}
+              onChange={(value) => {
+                setActiveRisk(value);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: t.allRisks, value: "All" },
+                { label: "Critical", value: "Critical" },
+                { label: "High", value: "High" },
+                { label: "Medium", value: "Medium" },
+              ]}
+              value={activeRisk}
+            />
+            <SelectField
+              label={t.marketFilter}
+              onChange={(value) => {
+                setActiveMarket(value);
+                setCurrentPage(1);
+              }}
+              options={[{ label: t.allMarkets, value: "All" }, ...marketOptions.map((market) => ({ label: market, value: market }))]}
+              value={activeMarket}
+            />
+            <SelectField
+              label={t.sortLabel}
+              onChange={(value) => setSortKey(value as SortKey)}
+              options={[
+                { label: t.newest, value: "newest" },
+                { label: t.severity, value: "risk" },
+                { label: t.categorySort, value: "category" },
+              ]}
+              value={sortKey}
+            />
+          </div>
+          <div className="mt-6">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t.filterLabel}</p>
+              {hasActiveFilters ? (
+                <button
+                  className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-800 transition-colors duration-300 hover:text-blue-950"
+                  onClick={resetFilters}
+                  type="button"
+                >
+                  {t.clearFilters}
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <CategoryButton active={activeCategory === "All"} count={insightArticles.length} label={t.all} onClick={() => setCategory("All")} />
+              {categoryDefs.map((category) => (
+                <CategoryButton
+                  active={activeCategory === category.value}
+                  count={categoryCounts.get(category.value) || 0}
+                  disabled={(categoryCounts.get(category.value) || 0) === 0}
+                  key={category.value}
+                  label={locale === "zh" ? category.zh : category.en}
+                  onClick={() => setCategory(category.value)}
+                />
+              ))}
             </div>
           </div>
         </div>
 
         <div className="mt-10 flex flex-col justify-between gap-4 border-y border-blue-900/10 py-5 text-sm text-slate-600 sm:flex-row sm:items-center">
           <p>
-            {t.showing} {filteredArticles.length === 0 ? 0 : pageStart + 1}-
-            {Math.min(pageStart + PAGE_SIZE, filteredArticles.length)} {t.of} {filteredArticles.length}
+            {t.showing} {filteredArticles.length === 0 ? 0 : pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filteredArticles.length)} {t.of}{" "}
+            {filteredArticles.length}
           </p>
           <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-slate-500">
             {t.page} {safePage} / {totalPages}
@@ -338,9 +531,7 @@ export default function InsightsPage() {
                     <span className="border border-slate-200 bg-slate-100 px-3 py-1 font-[family-name:var(--font-mono)] text-xs text-slate-700">
                       {article.market}
                     </span>
-                    <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase text-red-800">
-                      {article.riskLevel}
-                    </span>
+                    <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase text-red-800">{article.riskLevel}</span>
                   </div>
 
                   <h2 className="mt-6 font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
@@ -364,9 +555,7 @@ export default function InsightsPage() {
                     <Meta label={t.market} value={article.market} />
                     <Meta label={t.risk} value={article.riskLevel} />
                   </div>
-                  <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">
-                    {t.read}
-                  </p>
+                  <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">{t.read}</p>
                 </div>
               </a>
             ))
@@ -380,6 +569,23 @@ export default function InsightsPage() {
           totalPages={totalPages}
         />
 
+        <section className="mt-16 border border-blue-900/10 bg-white p-8">
+          <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.methodEyebrow}</p>
+          <h2 className="max-w-4xl font-[family-name:var(--font-serif)] text-4xl font-medium leading-tight text-blue-950">
+            {t.methodTitle}
+          </h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {t.methodItems.map((item, index) => (
+              <div className="border-l-2 border-red-800 bg-red-50/50 p-5" key={item}>
+                <p className="font-[family-name:var(--font-mono)] text-xs font-bold text-red-800">
+                  {String(index + 1).padStart(2, "0")}
+                </p>
+                <p className="mt-4 text-sm leading-7 text-blue-950">{item}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="mt-16 grid gap-8 border-y border-blue-900/10 py-12 lg:grid-cols-[0.7fr_1fr]">
           <div>
             <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.ctaEyebrow}</p>
@@ -390,10 +596,16 @@ export default function InsightsPage() {
           <div>
             <p className="max-w-2xl text-sm leading-7 text-slate-600">{t.ctaCopy}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <a className="inline-flex items-center justify-center border border-blue-950 px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white" href="/#checkout">
+              <a
+                className="inline-flex items-center justify-center border border-blue-950 px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                href="/#checkout"
+              >
                 {t.ctaPrimary}
               </a>
-              <a className="inline-flex items-center justify-center border border-slate-300 bg-white px-8 py-3 text-sm font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950" href="/intake">
+              <a
+                className="inline-flex items-center justify-center border border-slate-300 bg-white px-8 py-3 text-sm font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950"
+                href="/intake"
+              >
                 {t.ctaSecondary}
               </a>
             </div>
@@ -401,6 +613,35 @@ export default function InsightsPage() {
         </section>
       </section>
     </main>
+  );
+}
+
+function SelectField({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: Array<{ label: string; value: string }>;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{label}</span>
+      <select
+        className="border border-blue-900/10 bg-white px-4 py-3 text-sm text-blue-950 outline-none transition-colors duration-300 focus:border-blue-950"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -460,9 +701,7 @@ function Pagination({
         {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
           <button
             className={`h-10 w-10 border text-xs font-bold transition-colors duration-300 ${
-              page === currentPage
-                ? "border-blue-950 bg-blue-950 text-white"
-                : "border-blue-900/10 bg-white text-blue-950 hover:border-blue-950"
+              page === currentPage ? "border-blue-950 bg-blue-950 text-white" : "border-blue-900/10 bg-white text-blue-950 hover:border-blue-950"
             }`}
             key={page}
             onClick={() => onPageChange(page)}
