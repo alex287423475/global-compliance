@@ -147,6 +147,7 @@ const copy = {
       "Each cluster groups articles by commercial risk, not by generic content category. That keeps the archive useful when it grows from five articles to hundreds.",
     clusterOpen: "Open cluster",
     clusterTopic: "Topic page",
+    allTopics: "All topic pages",
     searchLabel: "Search intelligence",
     searchPlaceholder: "Search PayPal, Stripe, POA, UFLPA, chargeback...",
     riskFilter: "Risk",
@@ -208,6 +209,7 @@ const copy = {
       "每个集群按商业风险组织文章，而不是按泛泛内容分类。这样当文章从 5 篇增长到几百篇时，情报库仍然好用。",
     clusterOpen: "打开集群",
     clusterTopic: "主题页",
+    allTopics: "全部主题页",
     searchLabel: "搜索情报",
     searchPlaceholder: "搜索 PayPal、Stripe、POA、UFLPA、拒付...",
     riskFilter: "风险",
@@ -551,6 +553,12 @@ export default function InsightsPage() {
                 {t.clusterTitle}
               </h2>
               <p className="mt-5 text-sm leading-7 text-slate-600">{t.clusterCopy}</p>
+              <a
+                className="mt-7 inline-flex border border-blue-950 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white"
+                href="/insights/topics"
+              >
+                {t.allTopics}
+              </a>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {topicClusters.map((cluster) => (
