@@ -26,45 +26,73 @@ const copy = {
     brand: "Global Bridge Compliance",
     back: "Back to site",
     eyebrow: "Compliance Intelligence Library",
-    title: "Cross-border compliance intelligence index",
+    title: "Cross-border compliance intelligence library",
     body:
-      "Payment risk, marketplace appeals, market entry, supply chain, IP defense, crisis response, and capital documentation. Each brief is organized around risk context, applicable market, redline language, and evidence requirements.",
+      "Long-form risk briefs for payment reviews, marketplace appeals, market entry, supply-chain declarations, IP defense, crisis response, and capital documentation. Each article is structured around risk context, evidence burden, redline language, and practical response files.",
     scopeLabel: "Coverage",
+    featuredLabel: "Featured Brief",
+    featuredTitle: "Start with the file most likely to create immediate commercial exposure",
+    riskBoard: "Risk Board",
+    redlineTerms: "Redline terms",
+    searchLabel: "Search intelligence",
+    searchPlaceholder: "Search PayPal, Stripe, POA, UFLPA, chargeback...",
     all: "All",
     articles: "Articles",
+    briefCount: "Briefs",
     filterLabel: "Filter by Category",
     updated: "Updated",
     market: "Market",
     risk: "Risk",
     read: "Read brief",
     empty: "No intelligence briefs in this category yet.",
+    noMatches: "No matching intelligence briefs. Clear the search or choose another category.",
     showing: "Showing",
     of: "of",
     page: "Page",
     previous: "Previous",
     next: "Next",
+    ctaEyebrow: "Need a private read?",
+    ctaTitle: "Turn a live notice, appeal, or policy file into a controlled response package.",
+    ctaCopy:
+      "The library explains common risk patterns. A private review maps those patterns against your actual evidence, platform notice, policy text, and submission deadline.",
+    ctaPrimary: "Request diagnostic review",
+    ctaSecondary: "Open intake forms",
   },
   zh: {
     brand: "全球博译合规",
     back: "返回官网",
     eyebrow: "Compliance Intelligence Library",
-    title: "跨境合规情报索引",
+    title: "跨境合规情报库",
     body:
-      "覆盖支付风控、平台申诉、市场准入、供应链、知识产权、危机公关与资本文书场景。每篇情报均围绕具体风险、适用市场、红线表达和证据要求组织。",
+      "面向支付审核、平台申诉、市场准入、供应链声明、知识产权防御、危机回应和资本文书的深度风险文章。每篇围绕风险语境、证据负担、红线表达和可执行回应文件组织。",
     scopeLabel: "覆盖范围",
+    featuredLabel: "精选简报",
+    featuredTitle: "先看最可能造成即时商业暴露的文件类型",
+    riskBoard: "风险看板",
+    redlineTerms: "红线词",
+    searchLabel: "搜索情报",
+    searchPlaceholder: "搜索 PayPal、Stripe、POA、UFLPA、拒付...",
     all: "全部",
     articles: "篇文章",
+    briefCount: "篇",
     filterLabel: "按分类筛选",
     updated: "更新",
     market: "市场",
     risk: "风险",
     read: "阅读简报",
     empty: "该分类下暂无情报文章。",
+    noMatches: "没有匹配的情报文章。可以清空搜索，或切换其他分类。",
     showing: "显示",
     of: "共",
     page: "页",
     previous: "上一页",
     next: "下一页",
+    ctaEyebrow: "需要私密判断？",
+    ctaTitle: "把真实平台通知、申诉材料或政策文件，转化为可控回应文件包。",
+    ctaCopy:
+      "情报库解释常见风险模式。私密评估会把这些模式映射到你的真实证据、平台通知、政策文本和提交截止时间上。",
+    ctaPrimary: "预约诊断",
+    ctaSecondary: "打开资料收集表",
   },
 };
 
@@ -72,6 +100,7 @@ export default function InsightsPage() {
   const [locale, setLocaleState] = useState<Locale>("en");
   const [activeCategory, setActiveCategory] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const t = copy[locale];
 
   useEffect(() => {
@@ -97,12 +126,55 @@ export default function InsightsPage() {
   }
 
   const filteredArticles = useMemo(
-    () =>
-      activeCategory === "All"
-        ? insightArticles
-        : insightArticles.filter((article) => article.category === activeCategory),
-    [activeCategory],
+    () => {
+      const query = searchQuery.trim().toLowerCase();
+      return insightArticles.filter((article) => {
+        const categoryMatch = activeCategory === "All" || article.category === activeCategory;
+        if (!categoryMatch) return false;
+        if (!query) return true;
+        const haystack = [
+          article.title,
+          article.zhTitle,
+          article.summary,
+          article.zhSummary,
+          article.category,
+          article.market,
+          article.riskLevel,
+          ...article.relatedKeywords,
+          ...article.redlineTerms,
+        ].join(" ").toLowerCase();
+        return haystack.includes(query);
+      });
+    },
+    [activeCategory, searchQuery],
   );
+
+  const categoryCounts = useMemo(
+    () =>
+      new Map(
+        categoryDefs.map((category) => [
+          category.value,
+          insightArticles.filter((article) => article.category === category.value).length,
+        ]),
+      ),
+    [],
+  );
+
+  const riskCounts = useMemo(
+    () =>
+      ["Critical", "High", "Medium"].map((risk) => ({
+        risk,
+        count: insightArticles.filter((article) => article.riskLevel === risk).length,
+      })),
+    [],
+  );
+
+  const featuredArticle =
+    insightArticles.find((article) => article.riskLevel === "Critical") ||
+    insightArticles.find((article) => article.riskLevel === "High") ||
+    insightArticles[0];
+
+  const redlineTerms = Array.from(new Set(insightArticles.flatMap((article) => article.redlineTerms))).slice(0, 8);
 
   const totalPages = Math.max(1, Math.ceil(filteredArticles.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
@@ -143,29 +215,98 @@ export default function InsightsPage() {
 
           <div className="border border-blue-900/10 bg-white p-6">
             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
-              Index Status
+              {t.riskBoard}
             </p>
             <p className="mt-6 font-[family-name:var(--font-serif)] text-5xl font-semibold text-blue-950">
               {insightArticles.length}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{t.articles}</p>
+            <div className="mt-6 space-y-3 border-t border-blue-900/10 pt-5">
+              {riskCounts.map((item) => (
+                <div className="flex items-center justify-between gap-4 text-sm" key={item.risk}>
+                  <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{item.risk}</span>
+                  <span className="font-bold text-blue-950">{item.count}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
+        {featuredArticle ? (
+          <section className="mt-12 grid gap-6 border border-blue-900/10 bg-white lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="border-b border-blue-900/10 p-7 lg:border-b-0 lg:border-r">
+              <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
+                {t.featuredLabel}
+              </p>
+              <h2 className="font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950 md:text-4xl">
+                {t.featuredTitle}
+              </h2>
+              <p className="mt-7 mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                {t.redlineTerms}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {redlineTerms.map((term) => (
+                  <span className="border border-slate-200 bg-slate-100 px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-700" key={term}>
+                    {term}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <a className="group p-7 transition-colors duration-300 hover:bg-slate-50" href={`/insights/${featuredArticle.slug}`}>
+              <div className="flex flex-wrap gap-3">
+                <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">
+                  {getCategoryLabel(featuredArticle.category, locale)}
+                </span>
+                <span className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase text-red-800">
+                  {featuredArticle.riskLevel}
+                </span>
+              </div>
+              <h3 className="mt-5 font-[family-name:var(--font-serif)] text-3xl font-medium leading-tight text-blue-950">
+                {locale === "zh" ? featuredArticle.zhTitle : featuredArticle.title}
+              </h3>
+              <p className="mt-5 text-sm leading-7 text-slate-600">
+                {locale === "zh" ? featuredArticle.zhSummary : featuredArticle.summary}
+              </p>
+              <p className="mt-7 text-[11px] font-bold uppercase tracking-[0.18em] text-red-800">
+                {t.read}
+              </p>
+            </a>
+          </section>
+        ) : null}
+
         <div className="mt-10">
-          <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
-            {t.filterLabel}
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <CategoryButton active={activeCategory === "All"} label={t.all} onClick={() => setCategory("All")} />
-            {categoryDefs.map((category) => (
-              <CategoryButton
-                active={activeCategory === category.value}
-                key={category.value}
-                label={locale === "zh" ? category.zh : category.en}
-                onClick={() => setCategory(category.value)}
+          <div className="grid gap-5 lg:grid-cols-[0.72fr_1fr]">
+            <label className="grid gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t.searchLabel}</span>
+              <input
+                className="border border-blue-900/10 bg-white px-4 py-3 text-sm text-blue-950 outline-none transition-colors duration-300 placeholder:text-slate-400 focus:border-blue-950"
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder={t.searchPlaceholder}
+                type="search"
+                value={searchQuery}
               />
-            ))}
+            </label>
+            <div>
+              <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                {t.filterLabel}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <CategoryButton active={activeCategory === "All"} count={insightArticles.length} label={t.all} onClick={() => setCategory("All")} />
+                {categoryDefs.map((category) => (
+                  <CategoryButton
+                    active={activeCategory === category.value}
+                    count={categoryCounts.get(category.value) || 0}
+                    disabled={(categoryCounts.get(category.value) || 0) === 0}
+                    key={category.value}
+                    label={locale === "zh" ? category.zh : category.en}
+                    onClick={() => setCategory(category.value)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -181,7 +322,7 @@ export default function InsightsPage() {
 
         <div className="mt-10 border border-blue-900/10 bg-white">
           {paginatedArticles.length === 0 ? (
-            <div className="p-8 text-sm leading-7 text-slate-600">{t.empty}</div>
+            <div className="p-8 text-sm leading-7 text-slate-600">{searchQuery.trim() ? t.noMatches : t.empty}</div>
           ) : (
             paginatedArticles.map((article) => (
               <a
@@ -208,6 +349,13 @@ export default function InsightsPage() {
                   <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-600">
                     {locale === "zh" ? article.zhSummary : article.summary}
                   </p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {article.relatedKeywords.slice(0, 4).map((keyword) => (
+                      <span className="border border-blue-900/10 bg-slate-50 px-3 py-1 font-[family-name:var(--font-mono)] text-[11px] text-slate-600" key={keyword}>
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex flex-col justify-between border-t border-blue-900/10 pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
@@ -231,6 +379,26 @@ export default function InsightsPage() {
           onPageChange={setCurrentPage}
           totalPages={totalPages}
         />
+
+        <section className="mt-16 grid gap-8 border-y border-blue-900/10 py-12 lg:grid-cols-[0.7fr_1fr]">
+          <div>
+            <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800">{t.ctaEyebrow}</p>
+            <h2 className="font-[family-name:var(--font-serif)] text-4xl font-medium leading-tight text-blue-950 md:text-5xl">
+              {t.ctaTitle}
+            </h2>
+          </div>
+          <div>
+            <p className="max-w-2xl text-sm leading-7 text-slate-600">{t.ctaCopy}</p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <a className="inline-flex items-center justify-center border border-blue-950 px-8 py-3 text-sm font-bold uppercase tracking-widest text-blue-950 transition-colors duration-300 hover:bg-blue-950 hover:text-white" href="/#checkout">
+                {t.ctaPrimary}
+              </a>
+              <a className="inline-flex items-center justify-center border border-slate-300 bg-white px-8 py-3 text-sm font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 hover:border-blue-950 hover:text-blue-950" href="/intake">
+                {t.ctaSecondary}
+              </a>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
   );
@@ -238,10 +406,14 @@ export default function InsightsPage() {
 
 function CategoryButton({
   active,
+  count,
+  disabled = false,
   label,
   onClick,
 }: {
   active: boolean;
+  count: number;
+  disabled?: boolean;
   label: string;
   onClick: () => void;
 }) {
@@ -250,12 +422,13 @@ function CategoryButton({
       className={`border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors duration-300 ${
         active
           ? "border-blue-950 bg-blue-950 text-white"
-          : "border-blue-900/10 bg-white text-slate-700 hover:border-blue-950 hover:text-blue-950"
+          : "border-blue-900/10 bg-white text-slate-700 hover:border-blue-950 hover:text-blue-950 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200"
       }`}
+      disabled={disabled}
       onClick={onClick}
       type="button"
     >
-      {label}
+      {label} <span className={active ? "text-white/70" : disabled ? "text-slate-300" : "text-slate-400"}>{count}</span>
     </button>
   );
 }
